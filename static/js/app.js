@@ -29,6 +29,24 @@ const WEATHER_SYMBOLS = {
   Clouds: "\u2601",
 };
 
+const WEATHER_MOODS = {
+  Thunderstorm: "mood-stormy",
+  Drizzle: "mood-rainy",
+  Rain: "mood-rainy",
+  Snow: "mood-snowy",
+  Mist: "mood-foggy",
+  Smoke: "mood-foggy",
+  Haze: "mood-foggy",
+  Dust: "mood-foggy",
+  Fog: "mood-foggy",
+  Sand: "mood-foggy",
+  Ash: "mood-foggy",
+  Squall: "mood-windy",
+  Tornado: "mood-windy",
+  Clear: "mood-sunny",
+  Clouds: "mood-cloudy",
+};
+
 const UI_TEXT = {
   English: {
     title: "Regional Weather Studio",
@@ -58,6 +76,9 @@ const UI_TEXT = {
     allKeysFailed: "All inbuilt API keys failed.",
     weatherUnavailable: "Weather unavailable",
     updatedPrefix: "Updated",
+    detailsTitle: "Atmospheric Metrics",
+    detailsSubtitle: "Live values from current forecast",
+    snapshotLabel: "Current Snapshot",
     details: {
       feelsLike: "Feels like",
       humidity: "Humidity",
@@ -98,6 +119,9 @@ const UI_TEXT = {
     allKeysFailed: "সব ইনবিল্ট API key ব্যর্থ হয়েছে।",
     weatherUnavailable: "আবহাওয়া তথ্য নেই",
     updatedPrefix: "আপডেট",
+    detailsTitle: "বায়ুমণ্ডলীয় পরিমাপ",
+    detailsSubtitle: "বর্তমান পূর্বাভাসের লাইভ মান",
+    snapshotLabel: "বর্তমান অবস্থা",
     details: {
       feelsLike: "অনুভূত তাপমাত্রা",
       humidity: "আর্দ্রতা",
@@ -138,6 +162,9 @@ const UI_TEXT = {
     allKeysFailed: "सभी inbuilt API key विफल रहीं।",
     weatherUnavailable: "मौसम डेटा उपलब्ध नहीं",
     updatedPrefix: "अपडेट",
+    detailsTitle: "वायुमंडलीय मेट्रिक्स",
+    detailsSubtitle: "वर्तमान पूर्वानुमान से लाइव मान",
+    snapshotLabel: "वर्तमान स्थिति",
     details: {
       feelsLike: "अनुभूत तापमान",
       humidity: "आर्द्रता",
@@ -178,6 +205,9 @@ const UI_TEXT = {
     allKeysFailed: "அனைத்து inbuilt API key-களும் தோல்வியடைந்தன.",
     weatherUnavailable: "வானிலை தரவு இல்லை",
     updatedPrefix: "புதுப்பிப்பு",
+    detailsTitle: "வளிமண்டல அளவுகள்",
+    detailsSubtitle: "தற்போதைய முன்னறிவிப்பின் நேரடி மதிப்புகள்",
+    snapshotLabel: "தற்போதைய நிலை",
     details: {
       feelsLike: "உணரப்படும் வெப்பநிலை",
       humidity: "ஈரப்பதம்",
@@ -199,6 +229,7 @@ const els = {
   subtitleText: document.getElementById("subtitleText"),
   heroChip: document.getElementById("heroChip"),
   updatedAtText: document.getElementById("updatedAtText"),
+  weatherResultContainer: document.getElementById("weatherResultContainer"),
   cityLabel: document.getElementById("cityLabel"),
   cityInput: document.getElementById("cityInput"),
   languageLabel: document.getElementById("languageLabel"),
@@ -223,6 +254,9 @@ const els = {
   sunriseLabel: document.getElementById("sunriseLabel"),
   sunsetLabel: document.getElementById("sunsetLabel"),
   sourceLabel: document.getElementById("sourceLabel"),
+  detailsTitle: document.getElementById("detailsTitle"),
+  detailsSubtitle: document.getElementById("detailsSubtitle"),
+  snapshotLabel: document.getElementById("snapshotLabel"),
   feelsLikeValue: document.getElementById("feelsLikeValue"),
   humidityValue: document.getElementById("humidityValue"),
   windValue: document.getElementById("windValue"),
@@ -232,6 +266,18 @@ const els = {
   sunsetValue: document.getElementById("sunsetValue"),
   sourceValue: document.getElementById("sourceValue"),
 };
+
+let freshAnimationTimer = null;
+
+function setStatusText(message, kind = "neutral") {
+  els.statusText.textContent = message;
+  els.statusText.classList.remove("status-success", "status-error");
+  if (kind === "success") {
+    els.statusText.classList.add("status-success");
+  } else if (kind === "error") {
+    els.statusText.classList.add("status-error");
+  }
+}
 
 function currentPack() {
   const language = els.languageSelect.value;
@@ -248,7 +294,10 @@ function setUpdatedAtText(value) {
 }
 
 function setWeatherMood(condition) {
-  document.body.dataset.weather = condition || "default";
+  const moodKey = condition && WEATHER_MOODS[condition] ? condition : "default";
+  document.body.dataset.weather = moodKey;
+  document.body.className = document.body.className.replace(/\bmood-\S+/g, "").trim();
+  document.body.classList.add(WEATHER_MOODS[moodKey] || "mood-default");
 }
 
 function applyLanguageUI() {
@@ -264,9 +313,18 @@ function applyLanguageUI() {
   els.apiKeyInput.placeholder = pack.apiKeyPlaceholder;
   els.fetchBtn.textContent = pack.fetchButton;
   els.quickCityLabel.textContent = pack.quickLabel;
-  els.statusText.textContent = pack.statusReady;
+  setStatusText(pack.statusReady, "neutral");
   els.unitsSelect.options[0].textContent = pack.celsius;
   els.unitsSelect.options[1].textContent = pack.fahrenheit;
+  if (els.detailsTitle) {
+    els.detailsTitle.textContent = pack.detailsTitle || "Atmospheric Metrics";
+  }
+  if (els.detailsSubtitle) {
+    els.detailsSubtitle.textContent = pack.detailsSubtitle || "Live values from current forecast";
+  }
+  if (els.snapshotLabel) {
+    els.snapshotLabel.textContent = pack.snapshotLabel || "Current Snapshot";
+  }
 
   els.feelsLikeLabel.textContent = pack.details.feelsLike;
   els.humidityLabel.textContent = pack.details.humidity;
@@ -300,11 +358,44 @@ function renderQuickCities() {
 function setLoading(isLoading) {
   const pack = currentPack();
   els.fetchBtn.disabled = isLoading;
+  els.fetchBtn.setAttribute("aria-busy", String(isLoading));
   document.body.classList.toggle("is-loading", isLoading);
   els.fetchBtn.classList.toggle("is-loading", isLoading);
   if (isLoading) {
-    els.statusText.textContent = pack.statusLoading;
+    setStatusText(pack.statusLoading, "neutral");
   }
+  els.weatherResultContainer?.classList.toggle("is-updating", isLoading);
+}
+
+function resetWeatherDisplay(message = "") {
+  const pack = currentPack();
+  setStatusText(message || pack.statusReady, message ? "error" : "neutral");
+  els.conditionSymbol.textContent = "";
+  els.temperatureText.textContent = "";
+  els.descriptionText.textContent = message ? pack.weatherUnavailable : "";
+  els.locationText.textContent = "";
+  updateDetails({});
+  setWeatherMood("default");
+  els.weatherResultContainer?.classList.remove("is-fresh");
+  if (message) {
+    setUpdatedAtText("--");
+  }
+}
+
+function pulseFreshResults() {
+  if (!els.weatherResultContainer) {
+    return;
+  }
+  els.weatherResultContainer.classList.remove("is-fresh");
+  // Force reflow so the animation can replay after each successful fetch.
+  void els.weatherResultContainer.offsetWidth;
+  els.weatherResultContainer.classList.add("is-fresh");
+  if (freshAnimationTimer) {
+    window.clearTimeout(freshAnimationTimer);
+  }
+  freshAnimationTimer = window.setTimeout(() => {
+    els.weatherResultContainer?.classList.remove("is-fresh");
+  }, 520);
 }
 
 function updateDetails(values) {
@@ -334,26 +425,14 @@ function renderWeather(data) {
     sunset: data.sunset ?? "--",
     source: data.source ?? "--",
   });
-  els.statusText.textContent = pack.statusLoaded.replace("{source}", data.source || "--");
+  setStatusText(pack.statusLoaded.replace("{source}", data.source || "--"), "success");
   setWeatherMood(data.condition);
   setUpdatedAtText(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
+  pulseFreshResults();
 }
 
 function renderError(message) {
-  const pack = currentPack();
-  els.statusText.textContent = message;
-  els.descriptionText.textContent = pack.weatherUnavailable;
-  setWeatherMood("default");
-  updateDetails({
-    feelsLike: "--",
-    humidity: "--",
-    wind: "--",
-    pressure: "--",
-    clouds: "--",
-    sunrise: "--",
-    sunset: "--",
-    source: "--",
-  });
+  resetWeatherDisplay(message);
 }
 
 function getCandidateKeys(customKey) {
@@ -501,12 +580,12 @@ async function fetchWeather() {
 async function autoFetchWeatherForCurrentLocation() {
   const pack = currentPack();
   if (!navigator.geolocation) {
-    els.statusText.textContent = pack.locationUnsupported;
+    setStatusText(pack.locationUnsupported, "error");
     return;
   }
 
   setLoading(true);
-  els.statusText.textContent = pack.statusLocating;
+  setStatusText(pack.statusLocating, "neutral");
 
   try {
     const position = await getCurrentPosition({
@@ -525,7 +604,7 @@ async function autoFetchWeatherForCurrentLocation() {
     );
 
     if (result.error) {
-      els.statusText.textContent = result.error;
+      setStatusText(result.error, "error");
       return;
     }
 
@@ -533,12 +612,12 @@ async function autoFetchWeatherForCurrentLocation() {
     if (result.data.location) {
       els.cityInput.value = result.data.location.split(",")[0].trim();
     }
-    els.statusText.textContent = pack.statusAutoLoaded.replace("{source}", result.data.source || "--");
+    setStatusText(pack.statusAutoLoaded.replace("{source}", result.data.source || "--"), "success");
   } catch (error) {
     if (error && error.code === 1) {
-      els.statusText.textContent = pack.locationDenied;
+      setStatusText(pack.locationDenied, "error");
     } else {
-      els.statusText.textContent = pack.locationUnavailable;
+      setStatusText(pack.locationUnavailable, "error");
     }
   } finally {
     setLoading(false);
