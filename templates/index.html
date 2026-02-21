@@ -9,22 +9,28 @@
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Noto+Sans+Bengali:wght@400;600;700&family=Noto+Sans+Devanagari:wght@400;600;700&family=Noto+Sans+Tamil:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
 </head>
-<body>
+<body data-weather="default">
   <main class="app-shell">
     <header class="hero">
-      <p id="heroChip" class="hero-chip">Live + Local</p>
+      <div class="hero-top">
+        <p id="heroChip" class="hero-chip">Live + Local</p>
+        <p id="updatedAtText" class="updated-at">Updated: --</p>
+      </div>
       <h1 id="titleText">Regional Weather Studio</h1>
-      <p id="subtitleText">Modern weather app powered by Python backend and inbuilt API key fallback.</p>
+      <p id="subtitleText">Modern weather app with inbuilt API key fallback for static hosting.</p>
     </header>
 
     <section class="panel search-panel">
-      <div class="row two-col">
+      <div class="city-row">
         <label id="cityLabel" for="cityInput">City</label>
-        <input id="cityInput" name="city" type="text" placeholder="Search city..." autocomplete="off">
+        <div class="search-box">
+          <input id="cityInput" name="city" type="text" placeholder="Search city..." autocomplete="off">
+          <button id="fetchBtn" class="primary-btn" type="button">Get Weather</button>
+        </div>
       </div>
 
-      <div class="row grid-3">
-        <div>
+      <div class="settings-grid">
+        <div class="field-block">
           <label id="languageLabel" for="languageSelect">Language</label>
           <select id="languageSelect" name="language">
             <option value="English">English</option>
@@ -34,7 +40,7 @@
           </select>
         </div>
 
-        <div>
+        <div class="field-block">
           <label id="unitsLabel" for="unitsSelect">Units</label>
           <select id="unitsSelect" name="units">
             <option value="metric">Celsius</option>
@@ -42,18 +48,17 @@
           </select>
         </div>
 
-        <div>
+        <div class="field-block field-wide">
           <label id="apiKeyLabel" for="apiKeyInput">Custom API key (optional)</label>
           <input id="apiKeyInput" name="apiKey" type="password" placeholder="Uses inbuilt keys if empty">
         </div>
       </div>
 
-      <div class="row actions">
-        <button id="fetchBtn" class="primary-btn" type="button">Get Weather</button>
+      <div class="status-row">
         <p id="statusText" class="status-text">Ready</p>
       </div>
 
-      <div class="row">
+      <div class="quick-row">
         <p id="quickCityLabel" class="quick-label">Quick cities</p>
         <div id="quickCities" class="chips"></div>
       </div>
@@ -62,24 +67,26 @@
     <section class="content-grid">
       <article class="panel weather-main">
         <div class="weather-icon-temp">
-          <span id="conditionSymbol" class="condition-symbol">⛅</span>
-          <div>
-            <p id="temperatureText" class="temperature">-- °C</p>
+          <span id="conditionSymbol" class="condition-symbol">&#x26C5;</span>
+          <div class="temperature-block">
+            <p id="temperatureText" class="temperature">-- &deg;C</p>
             <p id="descriptionText" class="description">Weather unavailable</p>
+            <p id="locationText" class="location">--</p>
           </div>
         </div>
-        <p id="locationText" class="location">--</p>
       </article>
 
       <article class="panel weather-details">
-        <div class="detail-item"><span id="feelsLikeLabel">Feels like</span><strong id="feelsLikeValue">--</strong></div>
-        <div class="detail-item"><span id="humidityLabel">Humidity</span><strong id="humidityValue">--</strong></div>
-        <div class="detail-item"><span id="windLabel">Wind speed</span><strong id="windValue">--</strong></div>
-        <div class="detail-item"><span id="pressureLabel">Pressure</span><strong id="pressureValue">--</strong></div>
-        <div class="detail-item"><span id="cloudsLabel">Clouds</span><strong id="cloudsValue">--</strong></div>
-        <div class="detail-item"><span id="sunriseLabel">Sunrise</span><strong id="sunriseValue">--</strong></div>
-        <div class="detail-item"><span id="sunsetLabel">Sunset</span><strong id="sunsetValue">--</strong></div>
-        <div class="detail-item"><span id="sourceLabel">Data source</span><strong id="sourceValue">--</strong></div>
+        <div class="details-grid">
+          <div class="detail-item"><span id="feelsLikeLabel">Feels like</span><strong id="feelsLikeValue">--</strong></div>
+          <div class="detail-item"><span id="humidityLabel">Humidity</span><strong id="humidityValue">--</strong></div>
+          <div class="detail-item"><span id="windLabel">Wind speed</span><strong id="windValue">--</strong></div>
+          <div class="detail-item"><span id="pressureLabel">Pressure</span><strong id="pressureValue">--</strong></div>
+          <div class="detail-item"><span id="cloudsLabel">Clouds</span><strong id="cloudsValue">--</strong></div>
+          <div class="detail-item"><span id="sunriseLabel">Sunrise</span><strong id="sunriseValue">--</strong></div>
+          <div class="detail-item"><span id="sunsetLabel">Sunset</span><strong id="sunsetValue">--</strong></div>
+          <div class="detail-item"><span id="sourceLabel">Data source</span><strong id="sourceValue">--</strong></div>
+        </div>
       </article>
     </section>
   </main>

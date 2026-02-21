@@ -1,4 +1,4 @@
-const OPENWEATHER_ENDPOINT = "https://api.openweathermap.org/data/2.5/weather";
+﻿const OPENWEATHER_ENDPOINT = "https://api.openweathermap.org/data/2.5/weather";
 const BUILTIN_API_KEYS = [
   "d7842c0b970d897c608c64e6b6cc0b8a",
   "48a90ac42caa09f90dcaeee4096b9e53",
@@ -12,21 +12,21 @@ const LANGUAGE_CODES = {
 };
 
 const WEATHER_SYMBOLS = {
-  Thunderstorm: "⛈",
-  Drizzle: "🌦",
-  Rain: "🌧",
-  Snow: "🌨",
-  Mist: "🌫",
-  Smoke: "🌫",
-  Haze: "🌫",
-  Dust: "🌫",
-  Fog: "🌫",
-  Sand: "🌫",
-  Ash: "🌫",
-  Squall: "💨",
-  Tornado: "🌪",
-  Clear: "☀",
-  Clouds: "☁",
+  Thunderstorm: "\u26C8",
+  Drizzle: "\uD83C\uDF26",
+  Rain: "\uD83C\uDF27",
+  Snow: "\uD83C\uDF28",
+  Mist: "\uD83C\uDF2B",
+  Smoke: "\uD83C\uDF2B",
+  Haze: "\uD83C\uDF2B",
+  Dust: "\uD83C\uDF2B",
+  Fog: "\uD83C\uDF2B",
+  Sand: "\uD83C\uDF2B",
+  Ash: "\uD83C\uDF2B",
+  Squall: "\uD83D\uDCA8",
+  Tornado: "\uD83C\uDF2A",
+  Clear: "\u2600",
+  Clouds: "\u2601",
 };
 
 const UI_TEXT = {
@@ -46,11 +46,18 @@ const UI_TEXT = {
     quickLabel: "Quick cities",
     statusReady: "Ready",
     statusLoading: "Loading weather...",
+    statusLocating: "Detecting your location...",
     statusLoaded: "Weather loaded via {source}",
+    statusAutoLoaded: "Weather loaded for your location via {source}",
     cityMissing: "Please enter a city name.",
     cityNotFound: "City not found. Check spelling and try again.",
+    locationLookupFailed: "Unable to fetch weather for your current location.",
+    locationUnsupported: "Geolocation is not supported in this browser.",
+    locationDenied: "Location access denied. Enter a city manually.",
+    locationUnavailable: "Unable to detect your location right now.",
     allKeysFailed: "All inbuilt API keys failed.",
     weatherUnavailable: "Weather unavailable",
+    updatedPrefix: "Updated",
     details: {
       feelsLike: "Feels like",
       humidity: "Humidity",
@@ -79,11 +86,18 @@ const UI_TEXT = {
     quickLabel: "দ্রুত শহর",
     statusReady: "প্রস্তুত",
     statusLoading: "আবহাওয়া তথ্য লোড হচ্ছে...",
+    statusLocating: "আপনার অবস্থান শনাক্ত করা হচ্ছে...",
     statusLoaded: "{source} দিয়ে তথ্য লোড হয়েছে",
+    statusAutoLoaded: "আপনার অবস্থানের আবহাওয়া {source} দিয়ে লোড হয়েছে",
     cityMissing: "শহরের নাম লিখুন।",
     cityNotFound: "শহর খুঁজে পাওয়া যায়নি। বানান ঠিক করুন।",
+    locationLookupFailed: "আপনার বর্তমান অবস্থানের আবহাওয়া আনা যায়নি।",
+    locationUnsupported: "এই ব্রাউজারে লোকেশন সাপোর্ট নেই।",
+    locationDenied: "লোকেশন অনুমতি দেওয়া হয়নি। শহরের নাম লিখুন।",
+    locationUnavailable: "এখন আপনার অবস্থান শনাক্ত করা যাচ্ছে না।",
     allKeysFailed: "সব ইনবিল্ট API key ব্যর্থ হয়েছে।",
     weatherUnavailable: "আবহাওয়া তথ্য নেই",
+    updatedPrefix: "আপডেট",
     details: {
       feelsLike: "অনুভূত তাপমাত্রা",
       humidity: "আর্দ্রতা",
@@ -112,11 +126,18 @@ const UI_TEXT = {
     quickLabel: "त्वरित शहर",
     statusReady: "तैयार",
     statusLoading: "मौसम डेटा लोड हो रहा है...",
+    statusLocating: "आपकी लोकेशन पहचानी जा रही है...",
     statusLoaded: "{source} से डेटा लोड हुआ",
+    statusAutoLoaded: "आपकी लोकेशन का मौसम {source} से लोड हुआ",
     cityMissing: "कृपया शहर का नाम दर्ज करें।",
-    cityNotFound: "शहर नहीं मिला। वर्तनी जांचें।",
+    cityNotFound: "शहर नहीं मिला। वर्तनी जाँचें।",
+    locationLookupFailed: "आपकी वर्तमान लोकेशन का मौसम नहीं मिल सका।",
+    locationUnsupported: "इस ब्राउज़र में लोकेशन सपोर्ट नहीं है।",
+    locationDenied: "लोकेशन अनुमति नहीं मिली। शहर मैन्युअली दर्ज करें।",
+    locationUnavailable: "अभी आपकी लोकेशन पता नहीं चल पा रही है।",
     allKeysFailed: "सभी inbuilt API key विफल रहीं।",
     weatherUnavailable: "मौसम डेटा उपलब्ध नहीं",
+    updatedPrefix: "अपडेट",
     details: {
       feelsLike: "अनुभूत तापमान",
       humidity: "आर्द्रता",
@@ -145,11 +166,18 @@ const UI_TEXT = {
     quickLabel: "விரைவு நகரங்கள்",
     statusReady: "தயார்",
     statusLoading: "வானிலை தரவு ஏற்றப்படுகிறது...",
+    statusLocating: "உங்கள் இருப்பிடம் கண்டறியப்படுகிறது...",
     statusLoaded: "{source} மூலம் தரவு ஏற்றப்பட்டது",
+    statusAutoLoaded: "உங்கள் இருப்பிட வானிலை {source} மூலம் ஏற்றப்பட்டது",
     cityMissing: "நகரத்தின் பெயரை உள்ளிடவும்.",
     cityNotFound: "நகரம் கிடைக்கவில்லை. எழுத்துப்பிழை பார்க்கவும்.",
+    locationLookupFailed: "உங்கள் தற்போதைய இருப்பிட வானிலையை பெற முடியவில்லை.",
+    locationUnsupported: "இந்த உலாவியில் இருப்பிடம் ஆதரவு இல்லை.",
+    locationDenied: "இருப்பிட அனுமதி மறுக்கப்பட்டது. நகரத்தை கையால் உள்ளிடவும்.",
+    locationUnavailable: "இப்போது உங்கள் இருப்பிடத்தை கண்டறிய முடியவில்லை.",
     allKeysFailed: "அனைத்து inbuilt API key-களும் தோல்வியடைந்தன.",
     weatherUnavailable: "வானிலை தரவு இல்லை",
+    updatedPrefix: "புதுப்பிப்பு",
     details: {
       feelsLike: "உணரப்படும் வெப்பநிலை",
       humidity: "ஈரப்பதம்",
@@ -170,6 +198,7 @@ const els = {
   titleText: document.getElementById("titleText"),
   subtitleText: document.getElementById("subtitleText"),
   heroChip: document.getElementById("heroChip"),
+  updatedAtText: document.getElementById("updatedAtText"),
   cityLabel: document.getElementById("cityLabel"),
   cityInput: document.getElementById("cityInput"),
   languageLabel: document.getElementById("languageLabel"),
@@ -209,6 +238,19 @@ function currentPack() {
   return UI_TEXT[language] || UI_TEXT.English;
 }
 
+function setUpdatedAtText(value) {
+  if (!els.updatedAtText) {
+    return;
+  }
+  const pack = currentPack();
+  const prefix = pack.updatedPrefix || "Updated";
+  els.updatedAtText.textContent = `${prefix}: ${value}`;
+}
+
+function setWeatherMood(condition) {
+  document.body.dataset.weather = condition || "default";
+}
+
 function applyLanguageUI() {
   const pack = currentPack();
   els.titleText.textContent = pack.title;
@@ -236,6 +278,7 @@ function applyLanguageUI() {
   els.sourceLabel.textContent = pack.details.source;
 
   renderQuickCities();
+  setUpdatedAtText("--");
 }
 
 function renderQuickCities() {
@@ -257,6 +300,8 @@ function renderQuickCities() {
 function setLoading(isLoading) {
   const pack = currentPack();
   els.fetchBtn.disabled = isLoading;
+  document.body.classList.toggle("is-loading", isLoading);
+  els.fetchBtn.classList.toggle("is-loading", isLoading);
   if (isLoading) {
     els.statusText.textContent = pack.statusLoading;
   }
@@ -275,7 +320,7 @@ function updateDetails(values) {
 
 function renderWeather(data) {
   const pack = currentPack();
-  els.conditionSymbol.textContent = data.symbol || "🌤";
+  els.conditionSymbol.textContent = data.symbol || "\uD83C\uDF24";
   els.temperatureText.textContent = `${data.temperature ?? "--"} ${data.temperatureUnit ?? ""}`.trim();
   els.descriptionText.textContent = data.description || pack.weatherUnavailable;
   els.locationText.textContent = data.location || "--";
@@ -290,12 +335,15 @@ function renderWeather(data) {
     source: data.source ?? "--",
   });
   els.statusText.textContent = pack.statusLoaded.replace("{source}", data.source || "--");
+  setWeatherMood(data.condition);
+  setUpdatedAtText(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
 }
 
 function renderError(message) {
   const pack = currentPack();
   els.statusText.textContent = message;
   els.descriptionText.textContent = pack.weatherUnavailable;
+  setWeatherMood("default");
   updateDetails({
     feelsLike: "--",
     humidity: "--",
@@ -327,6 +375,12 @@ function getCandidateKeys(customKey) {
   });
 }
 
+function getCurrentPosition(options) {
+  return new Promise((resolve, reject) => {
+    navigator.geolocation.getCurrentPosition(resolve, reject, options);
+  });
+}
+
 function formatLocalTime(unixTs, timezoneOffsetSeconds) {
   if (!unixTs) {
     return "--";
@@ -353,10 +407,10 @@ function normalizeWeather(payload, units, source) {
   return {
     location,
     temperature: main.temp ?? "--",
-    temperatureUnit: units === "metric" ? "°C" : "°F",
+    temperatureUnit: units === "metric" ? "\u00B0C" : "\u00B0F",
     description: weather.description || "",
     condition,
-    symbol: WEATHER_SYMBOLS[condition] || "🌤",
+    symbol: WEATHER_SYMBOLS[condition] || "\uD83C\uDF24",
     feelsLike: main.feels_like ?? "--",
     humidity: main.humidity ?? "--",
     windSpeed: wind.speed ?? "--",
@@ -369,9 +423,10 @@ function normalizeWeather(payload, units, source) {
   };
 }
 
-async function fetchFromOpenWeather(city, language, units, customKey) {
+async function fetchFromOpenWeather(query, language, units, customKey) {
   const keys = getCandidateKeys(customKey);
   const pack = currentPack();
+  const queryParams = typeof query === "string" ? { q: query } : query;
 
   if (!keys.length) {
     return { error: pack.allKeysFailed };
@@ -382,7 +437,7 @@ async function fetchFromOpenWeather(city, language, units, customKey) {
 
   for (const entry of keys) {
     const params = new URLSearchParams({
-      q: city,
+      ...queryParams,
       appid: entry.key,
       units,
       lang: languageCode,
@@ -398,7 +453,7 @@ async function fetchFromOpenWeather(city, language, units, customKey) {
       }
 
       if (response.status === 404) {
-        return { error: pack.cityNotFound };
+        return { error: queryParams.q ? pack.cityNotFound : pack.locationLookupFailed };
       }
       if (response.status === 401 || response.status === 429) {
         lastKeyError = payload.message || `API key error (${response.status})`;
@@ -425,7 +480,7 @@ async function fetchWeather() {
   setLoading(true);
   try {
     const result = await fetchFromOpenWeather(
-      city,
+      { q: city },
       els.languageSelect.value,
       els.unitsSelect.value,
       els.apiKeyInput.value.trim()
@@ -443,8 +498,56 @@ async function fetchWeather() {
   }
 }
 
+async function autoFetchWeatherForCurrentLocation() {
+  const pack = currentPack();
+  if (!navigator.geolocation) {
+    els.statusText.textContent = pack.locationUnsupported;
+    return;
+  }
+
+  setLoading(true);
+  els.statusText.textContent = pack.statusLocating;
+
+  try {
+    const position = await getCurrentPosition({
+      enableHighAccuracy: true,
+      timeout: 12000,
+      maximumAge: 300000,
+    });
+    const result = await fetchFromOpenWeather(
+      {
+        lat: position.coords.latitude.toString(),
+        lon: position.coords.longitude.toString(),
+      },
+      els.languageSelect.value,
+      els.unitsSelect.value,
+      els.apiKeyInput.value.trim()
+    );
+
+    if (result.error) {
+      els.statusText.textContent = result.error;
+      return;
+    }
+
+    renderWeather(result.data);
+    if (result.data.location) {
+      els.cityInput.value = result.data.location.split(",")[0].trim();
+    }
+    els.statusText.textContent = pack.statusAutoLoaded.replace("{source}", result.data.source || "--");
+  } catch (error) {
+    if (error && error.code === 1) {
+      els.statusText.textContent = pack.locationDenied;
+    } else {
+      els.statusText.textContent = pack.locationUnavailable;
+    }
+  } finally {
+    setLoading(false);
+  }
+}
+
 function initialize() {
   applyLanguageUI();
+  setWeatherMood("default");
   els.fetchBtn.addEventListener("click", fetchWeather);
   els.languageSelect.addEventListener("change", applyLanguageUI);
   els.cityInput.addEventListener("keydown", (event) => {
@@ -452,6 +555,11 @@ function initialize() {
       fetchWeather();
     }
   });
+  els.cityInput.focus();
+  autoFetchWeatherForCurrentLocation();
 }
 
 initialize();
+
+
+
