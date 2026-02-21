@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Regional Weather Studio</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Noto+Sans+Bengali:wght@400;600;700&family=Noto+Sans+Devanagari:wght@400;600;700&family=Noto+Sans+Tamil:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./static/css/app.css">
+</head>
+<body>
+  <main class="app-shell">
+    <header class="hero">
+      <p id="heroChip" class="hero-chip">Live + Local</p>
+      <h1 id="titleText">Regional Weather Studio</h1>
+      <p id="subtitleText">Modern weather app with inbuilt API key fallback for static hosting.</p>
+    </header>
+
+    <section class="panel search-panel">
+      <div class="row two-col">
+        <label id="cityLabel" for="cityInput">City</label>
+        <input id="cityInput" name="city" type="text" placeholder="Search city..." autocomplete="off">
+      </div>
+
+      <div class="row grid-3">
+        <div>
+          <label id="languageLabel" for="languageSelect">Language</label>
+          <select id="languageSelect" name="language">
+            <option value="English">English</option>
+            <option value="Bengali">Bengali</option>
+            <option value="Hindi">Hindi</option>
+            <option value="Tamil">Tamil</option>
+          </select>
+        </div>
+
+        <div>
+          <label id="unitsLabel" for="unitsSelect">Units</label>
+          <select id="unitsSelect" name="units">
+            <option value="metric">Celsius</option>
+            <option value="imperial">Fahrenheit</option>
+          </select>
+        </div>
+
+        <div>
+          <label id="apiKeyLabel" for="apiKeyInput">Custom API key (optional)</label>
+          <input id="apiKeyInput" name="apiKey" type="password" placeholder="Uses inbuilt keys if empty">
+        </div>
+      </div>
+
+      <div class="row actions">
+        <button id="fetchBtn" class="primary-btn" type="button">Get Weather</button>
+        <p id="statusText" class="status-text">Ready</p>
+      </div>
+
+      <div class="row">
+        <p id="quickCityLabel" class="quick-label">Quick cities</p>
+        <div id="quickCities" class="chips"></div>
+      </div>
+    </section>
+
+    <section class="content-grid">
+      <article class="panel weather-main">
+        <div class="weather-icon-temp">
+          <span id="conditionSymbol" class="condition-symbol">⛅</span>
+          <div>
+            <p id="temperatureText" class="temperature">-- °C</p>
+            <p id="descriptionText" class="description">Weather unavailable</p>
+          </div>
+        </div>
+        <p id="locationText" class="location">--</p>
+      </article>
+
+      <article class="panel weather-details">
+        <div class="detail-item"><span id="feelsLikeLabel">Feels like</span><strong id="feelsLikeValue">--</strong></div>
+        <div class="detail-item"><span id="humidityLabel">Humidity</span><strong id="humidityValue">--</strong></div>
+        <div class="detail-item"><span id="windLabel">Wind speed</span><strong id="windValue">--</strong></div>
+        <div class="detail-item"><span id="pressureLabel">Pressure</span><strong id="pressureValue">--</strong></div>
+        <div class="detail-item"><span id="cloudsLabel">Clouds</span><strong id="cloudsValue">--</strong></div>
+        <div class="detail-item"><span id="sunriseLabel">Sunrise</span><strong id="sunriseValue">--</strong></div>
+        <div class="detail-item"><span id="sunsetLabel">Sunset</span><strong id="sunsetValue">--</strong></div>
+        <div class="detail-item"><span id="sourceLabel">Data source</span><strong id="sourceValue">--</strong></div>
+      </article>
+    </section>
+  </main>
+
+  <script src="./static/js/app.js"></script>
+</body>
+</html>

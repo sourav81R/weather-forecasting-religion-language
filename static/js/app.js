@@ -1,7 +1,38 @@
+const OPENWEATHER_ENDPOINT = "https://api.openweathermap.org/data/2.5/weather";
+const BUILTIN_API_KEYS = [
+  "d7842c0b970d897c608c64e6b6cc0b8a",
+  "48a90ac42caa09f90dcaeee4096b9e53",
+];
+
+const LANGUAGE_CODES = {
+  English: "en",
+  Bengali: "bn",
+  Hindi: "hi",
+  Tamil: "ta",
+};
+
+const WEATHER_SYMBOLS = {
+  Thunderstorm: "⛈",
+  Drizzle: "🌦",
+  Rain: "🌧",
+  Snow: "🌨",
+  Mist: "🌫",
+  Smoke: "🌫",
+  Haze: "🌫",
+  Dust: "🌫",
+  Fog: "🌫",
+  Sand: "🌫",
+  Ash: "🌫",
+  Squall: "💨",
+  Tornado: "🌪",
+  Clear: "☀",
+  Clouds: "☁",
+};
+
 const UI_TEXT = {
   English: {
     title: "Regional Weather Studio",
-    subtitle: "Modern weather app powered by Python backend and inbuilt API key fallback.",
+    subtitle: "Modern weather app with inbuilt API key fallback for static hosting.",
     chip: "Live + Local",
     cityLabel: "City",
     cityPlaceholder: "Search city...",
@@ -17,6 +48,8 @@ const UI_TEXT = {
     statusLoading: "Loading weather...",
     statusLoaded: "Weather loaded via {source}",
     cityMissing: "Please enter a city name.",
+    cityNotFound: "City not found. Check spelling and try again.",
+    allKeysFailed: "All inbuilt API keys failed.",
     weatherUnavailable: "Weather unavailable",
     details: {
       feelsLike: "Feels like",
@@ -32,7 +65,7 @@ const UI_TEXT = {
   },
   Bengali: {
     title: "আঞ্চলিক আবহাওয়া স্টুডিও",
-    subtitle: "Python ব্যাকএন্ড ও ইনবিল্ট API key fallback সহ আধুনিক আবহাওয়া অ্যাপ।",
+    subtitle: "ইনবিল্ট API key fallback সহ আধুনিক আবহাওয়া অ্যাপ।",
     chip: "লাইভ + লোকাল",
     cityLabel: "শহর",
     cityPlaceholder: "শহরের নাম লিখুন...",
@@ -48,6 +81,8 @@ const UI_TEXT = {
     statusLoading: "আবহাওয়া তথ্য লোড হচ্ছে...",
     statusLoaded: "{source} দিয়ে তথ্য লোড হয়েছে",
     cityMissing: "শহরের নাম লিখুন।",
+    cityNotFound: "শহর খুঁজে পাওয়া যায়নি। বানান ঠিক করুন।",
+    allKeysFailed: "সব ইনবিল্ট API key ব্যর্থ হয়েছে।",
     weatherUnavailable: "আবহাওয়া তথ্য নেই",
     details: {
       feelsLike: "অনুভূত তাপমাত্রা",
@@ -63,7 +98,7 @@ const UI_TEXT = {
   },
   Hindi: {
     title: "क्षेत्रीय मौसम स्टूडियो",
-    subtitle: "Python बैकएंड और inbuilt API key fallback के साथ आधुनिक मौसम ऐप।",
+    subtitle: "inbuilt API key fallback के साथ आधुनिक मौसम ऐप।",
     chip: "लाइव + लोकल",
     cityLabel: "शहर",
     cityPlaceholder: "शहर खोजें...",
@@ -79,6 +114,8 @@ const UI_TEXT = {
     statusLoading: "मौसम डेटा लोड हो रहा है...",
     statusLoaded: "{source} से डेटा लोड हुआ",
     cityMissing: "कृपया शहर का नाम दर्ज करें।",
+    cityNotFound: "शहर नहीं मिला। वर्तनी जांचें।",
+    allKeysFailed: "सभी inbuilt API key विफल रहीं।",
     weatherUnavailable: "मौसम डेटा उपलब्ध नहीं",
     details: {
       feelsLike: "अनुभूत तापमान",
@@ -94,7 +131,7 @@ const UI_TEXT = {
   },
   Tamil: {
     title: "பிராந்திய வானிலை ஸ்டூடியோ",
-    subtitle: "Python backend மற்றும் inbuilt API key fallback உடன் நவீன வானிலை பயன்பாடு.",
+    subtitle: "inbuilt API key fallback உடன் நவீன வானிலை பயன்பாடு.",
     chip: "லைவ் + லோகல்",
     cityLabel: "நகரம்",
     cityPlaceholder: "நகரத்தை தேடவும்...",
@@ -110,6 +147,8 @@ const UI_TEXT = {
     statusLoading: "வானிலை தரவு ஏற்றப்படுகிறது...",
     statusLoaded: "{source} மூலம் தரவு ஏற்றப்பட்டது",
     cityMissing: "நகரத்தின் பெயரை உள்ளிடவும்.",
+    cityNotFound: "நகரம் கிடைக்கவில்லை. எழுத்துப்பிழை பார்க்கவும்.",
+    allKeysFailed: "அனைத்து inbuilt API key-களும் தோல்வியடைந்தன.",
     weatherUnavailable: "வானிலை தரவு இல்லை",
     details: {
       feelsLike: "உணரப்படும் வெப்பநிலை",
@@ -269,36 +308,136 @@ function renderError(message) {
   });
 }
 
+function getCandidateKeys(customKey) {
+  const candidates = [];
+  if (customKey) {
+    candidates.push({ key: customKey, source: "custom key" });
+  }
+  BUILTIN_API_KEYS.forEach((key, index) => {
+    candidates.push({ key, source: `inbuilt key #${index + 1}` });
+  });
+
+  const seen = new Set();
+  return candidates.filter((entry) => {
+    if (!entry.key || seen.has(entry.key)) {
+      return false;
+    }
+    seen.add(entry.key);
+    return true;
+  });
+}
+
+function formatLocalTime(unixTs, timezoneOffsetSeconds) {
+  if (!unixTs) {
+    return "--";
+  }
+  const local = new Date((unixTs + timezoneOffsetSeconds) * 1000);
+  const hh = String(local.getUTCHours()).padStart(2, "0");
+  const mm = String(local.getUTCMinutes()).padStart(2, "0");
+  return `${hh}:${mm}`;
+}
+
+function normalizeWeather(payload, units, source) {
+  const weather = (payload.weather && payload.weather[0]) || {};
+  const main = payload.main || {};
+  const wind = payload.wind || {};
+  const sys = payload.sys || {};
+  const clouds = payload.clouds || {};
+  const timezone = Number(payload.timezone || 0);
+
+  const city = payload.name || "";
+  const country = sys.country || "";
+  const location = country ? `${city}, ${country}` : city;
+  const condition = weather.main || "";
+
+  return {
+    location,
+    temperature: main.temp ?? "--",
+    temperatureUnit: units === "metric" ? "°C" : "°F",
+    description: weather.description || "",
+    condition,
+    symbol: WEATHER_SYMBOLS[condition] || "🌤",
+    feelsLike: main.feels_like ?? "--",
+    humidity: main.humidity ?? "--",
+    windSpeed: wind.speed ?? "--",
+    windUnit: units === "metric" ? "m/s" : "mph",
+    pressure: main.pressure ?? "--",
+    clouds: clouds.all ?? "--",
+    sunrise: formatLocalTime(sys.sunrise, timezone),
+    sunset: formatLocalTime(sys.sunset, timezone),
+    source,
+  };
+}
+
+async function fetchFromOpenWeather(city, language, units, customKey) {
+  const keys = getCandidateKeys(customKey);
+  const pack = currentPack();
+
+  if (!keys.length) {
+    return { error: pack.allKeysFailed };
+  }
+
+  const languageCode = LANGUAGE_CODES[language] || "en";
+  let lastKeyError = "";
+
+  for (const entry of keys) {
+    const params = new URLSearchParams({
+      q: city,
+      appid: entry.key,
+      units,
+      lang: languageCode,
+    });
+    const url = `${OPENWEATHER_ENDPOINT}?${params.toString()}`;
+
+    try {
+      const response = await fetch(url);
+      const payload = await response.json().catch(() => ({}));
+
+      if (response.ok) {
+        return { data: normalizeWeather(payload, units, entry.source) };
+      }
+
+      if (response.status === 404) {
+        return { error: pack.cityNotFound };
+      }
+      if (response.status === 401 || response.status === 429) {
+        lastKeyError = payload.message || `API key error (${response.status})`;
+        continue;
+      }
+      return { error: payload.message || "Unable to fetch weather data." };
+    } catch (error) {
+      lastKeyError = error.message || "Network error";
+    }
+  }
+
+  return {
+    error: `${pack.allKeysFailed}${lastKeyError ? ` (${lastKeyError})` : ""}`,
+  };
+}
+
 async function fetchWeather() {
   const city = els.cityInput.value.trim();
   if (!city) {
-    const pack = currentPack();
-    renderError(pack.cityMissing);
+    renderError(currentPack().cityMissing);
     return;
   }
 
   setLoading(true);
   try {
-    const response = await fetch("/api/weather", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        city,
-        language: els.languageSelect.value,
-        units: els.unitsSelect.value,
-        apiKey: els.apiKeyInput.value.trim(),
-      }),
-    });
-    const payload = await response.json();
-    if (!response.ok) {
-      renderError(payload.error || "Unable to fetch weather data.");
+    const result = await fetchFromOpenWeather(
+      city,
+      els.languageSelect.value,
+      els.unitsSelect.value,
+      els.apiKeyInput.value.trim()
+    );
+
+    if (result.error) {
+      renderError(result.error);
       return;
     }
-    renderWeather(payload);
-  } catch (err) {
-    renderError(`Network error: ${err.message}`);
+    renderWeather(result.data);
+  } catch (error) {
+    renderError(`Network error: ${error.message}`);
   } finally {
     setLoading(false);
   }
