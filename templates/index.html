@@ -6,18 +6,31 @@
   <title>Regional Weather Studio</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Noto+Sans+Bengali:wght@400;600;700&family=Noto+Sans+Devanagari:wght@400;600;700&family=Noto+Sans+Tamil:wght@400;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Noto+Sans+Bengali:wght@400;600;700&family=Noto+Sans+Devanagari:wght@400;600;700&family=Noto+Sans+Tamil:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
 </head>
 <body data-weather="default">
   <main class="app-shell">
-    <header class="hero">
+    <header class="hero panel">
       <div class="hero-top">
         <p id="heroChip" class="hero-chip">Live + Local</p>
         <p id="updatedAtText" class="updated-at">Updated: --</p>
       </div>
-      <h1 id="titleText">Regional Weather Studio</h1>
-      <p id="subtitleText">Modern weather app with inbuilt API key fallback for static hosting.</p>
+
+      <div class="hero-body">
+        <div>
+          <h1 id="titleText">Regional Weather Studio</h1>
+          <p id="subtitleText">Modern weather app with inbuilt API key fallback for static hosting.</p>
+        </div>
+        <div class="hero-tags" aria-hidden="true">
+          <span class="hero-tag">Realtime</span>
+          <span class="hero-tag">Location Aware</span>
+          <span class="hero-tag">Multilingual</span>
+        </div>
+      </div>
+
+      <span class="hero-orb hero-orb-a" aria-hidden="true"></span>
+      <span class="hero-orb hero-orb-b" aria-hidden="true"></span>
     </header>
 
     <section class="panel search-panel">
@@ -55,7 +68,7 @@
       </div>
 
       <div class="status-row">
-        <p id="statusText" class="status-text">Ready</p>
+        <p id="statusText" class="status-text" aria-live="polite">Ready</p>
       </div>
 
       <div class="quick-row">
@@ -64,8 +77,11 @@
       </div>
     </section>
 
-    <section class="content-grid">
+    <section id="weatherResultContainer" class="content-grid">
       <article class="panel weather-main">
+        <div class="weather-main-top">
+          <p id="snapshotLabel" class="weather-kicker">Current Snapshot</p>
+        </div>
         <div class="weather-icon-temp">
           <span id="conditionSymbol" class="condition-symbol">&#x26C5;</span>
           <div class="temperature-block">
@@ -77,6 +93,10 @@
       </article>
 
       <article class="panel weather-details">
+        <div class="details-head">
+          <h2 id="detailsTitle" class="details-title">Atmospheric Metrics</h2>
+          <p id="detailsSubtitle" class="details-subtitle">Live values from current forecast</p>
+        </div>
         <div class="details-grid">
           <div class="detail-item"><span id="feelsLikeLabel">Feels like</span><strong id="feelsLikeValue">--</strong></div>
           <div class="detail-item"><span id="humidityLabel">Humidity</span><strong id="humidityValue">--</strong></div>
