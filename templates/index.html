@@ -6,7 +6,7 @@
   <title>Regional Weather Studio</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Noto+Sans+Bengali:wght@400;600;700&family=Noto+Sans+Devanagari:wght@400;600;700&family=Noto+Sans+Tamil:wght@400;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Noto+Sans+Bengali:wght@400;600;700&family=Noto+Sans+Devanagari:wght@400;600;700&family=Noto+Sans+Tamil:wght@400;600;700&family=Noto+Sans+Malayalam:wght@400;600;700&family=Noto+Sans+Telugu:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
 </head>
 <body data-weather="default">
@@ -47,9 +47,28 @@
           <label id="languageLabel" for="languageSelect">Language</label>
           <select id="languageSelect" name="language">
             <option value="English">English</option>
+            <option value="Assamese">Assamese</option>
             <option value="Bengali">Bengali</option>
+            <option value="Bodo">Bodo</option>
+            <option value="Dogri">Dogri</option>
+            <option value="Gujarati">Gujarati</option>
             <option value="Hindi">Hindi</option>
+            <option value="Kannada">Kannada</option>
+            <option value="Kashmiri">Kashmiri</option>
+            <option value="Konkani">Konkani</option>
+            <option value="Maithili">Maithili</option>
+            <option value="Malayalam">Malayalam</option>
+            <option value="Manipuri">Manipuri</option>
+            <option value="Marathi">Marathi</option>
+            <option value="Nepali">Nepali</option>
+            <option value="Odia">Odia</option>
+            <option value="Punjabi">Punjabi</option>
+            <option value="Sanskrit">Sanskrit</option>
+            <option value="Santali">Santali</option>
+            <option value="Sindhi">Sindhi</option>
             <option value="Tamil">Tamil</option>
+            <option value="Telugu">Telugu</option>
+            <option value="Urdu">Urdu</option>
           </select>
         </div>
 
@@ -108,6 +127,18 @@
           <div class="detail-item"><span id="sourceLabel">Data source</span><strong id="sourceValue">--</strong></div>
         </div>
       </article>
+    </section>
+
+    <section class="panel forecast-panel" aria-live="polite">
+      <div class="forecast-head">
+        <div>
+          <h2 id="forecastTitle" class="details-title">15-Day Outlook</h2>
+          <p id="forecastSubtitle" class="details-subtitle">Expected changes in temperature and rain probability.</p>
+        </div>
+        <p id="forecastTrend" class="forecast-trend">Expected change: --</p>
+      </div>
+      <p id="forecastDisclaimer" class="forecast-disclaimer">Forecast values can differ from Google because providers and weather models are different.</p>
+      <div id="forecastList" class="forecast-list"></div>
     </section>
   </main>
 

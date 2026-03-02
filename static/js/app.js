@@ -1,4 +1,6 @@
 ﻿const OPENWEATHER_ENDPOINT = "https://api.openweathermap.org/data/2.5/weather";
+const OPEN_METEO_FORECAST_ENDPOINT = 'https://api.open-meteo.com/v1/forecast';
+const FORECAST_DAYS = 15;
 const BUILTIN_API_KEYS = [
   "d7842c0b970d897c608c64e6b6cc0b8a",
   "48a90ac42caa09f90dcaeee4096b9e53",
@@ -6,9 +8,159 @@ const BUILTIN_API_KEYS = [
 
 const LANGUAGE_CODES = {
   English: "en",
+  Assamese: "as",
   Bengali: "bn",
+  Bodo: "brx",
+  Dogri: "doi",
+  Gujarati: "gu",
   Hindi: "hi",
+  Kannada: "kn",
+  Kashmiri: "ks",
+  Konkani: "gom",
+  Maithili: "mai",
+  Malayalam: "ml",
+  Manipuri: "mni",
+  Marathi: "mr",
+  Nepali: "ne",
+  Odia: "or",
+  Punjabi: "pa",
+  Sanskrit: "sa",
+  Santali: "sat",
+  Sindhi: "sd",
   Tamil: "ta",
+  Telugu: "te",
+  Urdu: "ur",
+};
+
+const LANGUAGE_LOCALES = {
+  English: "en-IN",
+  Assamese: "as-IN",
+  Bengali: "bn-IN",
+  Dogri: "hi-IN",
+  Gujarati: "gu-IN",
+  Hindi: "hi-IN",
+  Kannada: "kn-IN",
+  Kashmiri: "ks-IN",
+  Konkani: "gom-IN",
+  Malayalam: "ml-IN",
+  Marathi: "mr-IN",
+  Nepali: "ne-NP",
+  Odia: "or-IN",
+  Punjabi: "pa-IN",
+  Sanskrit: "sa-IN",
+  Sindhi: "sd-IN",
+  Tamil: "ta-IN",
+  Telugu: "te-IN",
+  Urdu: "ur-IN",
+};
+
+const FORECAST_TEXT = {
+  English: {
+    title: "15-Day Outlook",
+    subtitle: "Expected changes in temperature and rain probability.",
+    trendPrefix: "Expected change",
+    loading: "Loading 15-day forecast...",
+    unavailable: "15-day forecast unavailable right now.",
+    idle: "Search a city to load the 15-day outlook.",
+    rainChance: "Rain chance",
+    disclaimer: "Forecast values can differ from Google because providers and weather models are different.",
+    warming: "warmer",
+    cooling: "cooler",
+    stable: "stable",
+    wetter: "wetter",
+    drier: "drier",
+  },
+  Hindi: {
+    title: "15-दिन का पूर्वानुमान",
+    subtitle: "तापमान और बारिश की संभावना में संभावित बदलाव।",
+    trendPrefix: "संभावित बदलाव",
+    loading: "15-दिन का पूर्वानुमान लोड हो रहा है...",
+    unavailable: "अभी 15-दिन का पूर्वानुमान उपलब्ध नहीं है।",
+    idle: "15-दिन का पूर्वानुमान देखने के लिए शहर खोजें।",
+    rainChance: "बारिश की संभावना",
+    disclaimer: "Google और इस ऐप में अंतर हो सकता है क्योंकि डेटा स्रोत और मौसम मॉडल अलग होते हैं।",
+    warming: "गर्म",
+    cooling: "ठंडा",
+    stable: "लगभग स्थिर",
+    wetter: "ज्यादा बारिश",
+    drier: "कम बारिश",
+  },
+  Nepali: {
+    title: "१५-दिने पूर्वानुमान",
+    subtitle: "तापक्रम र वर्षाको सम्भावनामा अपेक्षित परिवर्तन।",
+    trendPrefix: "अपेक्षित परिवर्तन",
+    loading: "१५-दिने पूर्वानुमान लोड हुँदैछ...",
+    unavailable: "अहिले १५-दिने पूर्वानुमान उपलब्ध छैन।",
+    idle: "१५-दिने पूर्वानुमान हेर्न सहर खोज्नुहोस्।",
+    rainChance: "वर्षाको सम्भावना",
+    disclaimer: "Google सँग फरक देखिन सक्छ किनकि डेटा स्रोत र मौसम मोडेल फरक हुन्छन्।",
+    warming: "तातो हुँदै",
+    cooling: "चिसिँदै",
+    stable: "लगभग स्थिर",
+    wetter: "बढी वर्षा",
+    drier: "कम वर्षा",
+  },
+  Malayalam: {
+    title: "15 ദിവസത്തെ പ്രവചനം",
+    subtitle: "താപനിലയിലും മഴസാധ്യതയിലും പ്രതീക്ഷിക്കുന്ന മാറ്റങ്ങൾ.",
+    trendPrefix: "പ്രതീക്ഷിക്കുന്ന മാറ്റം",
+    loading: "15 ദിവസത്തെ പ്രവചനം ലോഡ് ചെയ്യുന്നു...",
+    unavailable: "ഇപ്പോൾ 15 ദിവസത്തെ പ്രവചനം ലഭ്യമല്ല.",
+    idle: "15 ദിവസത്തെ പ്രവചനം കാണാൻ ഒരു നഗരം തിരയുക.",
+    rainChance: "മഴ സാധ്യത",
+    disclaimer: "ഡാറ്റ ഉറവിടവും മോഡലുകളും വ്യത്യസ്തമായതിനാൽ Google-നേക്കാൾ വ്യത്യാസം വരാം.",
+    warming: "കൂടുതൽ ചൂട്",
+    cooling: "കൂടുതൽ തണുപ്പ്",
+    stable: "ഏകദേശം സ്ഥിരം",
+    wetter: "കൂടുതൽ മഴ",
+    drier: "കുറഞ്ഞ മഴ",
+  },
+  Telugu: {
+    title: "15-రోజుల అంచనా",
+    subtitle: "ఉష్ణోగ్రత మరియు వర్ష అవకాశంలో భావించే మార్పులు.",
+    trendPrefix: "భావించే మార్పు",
+    loading: "15-రోజుల అంచనా లోడ్ అవుతోంది...",
+    unavailable: "ప్రస్తుతం 15-రోజుల అంచనా అందుబాటులో లేదు.",
+    idle: "15-రోజుల అంచనా చూడటానికి నగరాన్ని వెతకండి.",
+    rainChance: "వర్ష అవకాశం",
+    disclaimer: "డేటా సోర్స్ మరియు మోడల్స్ వేరుగా ఉండటం వల్ల Google తో తేడాలు రావచ్చు.",
+    warming: "ఎక్కువ వేడి",
+    cooling: "ఎక్కువ చలి",
+    stable: "దాదాపు స్థిరం",
+    wetter: "ఎక్కువ వర్షం",
+    drier: "తక్కువ వర్షం",
+  },
+};
+
+const WMO_TO_CONDITION = {
+  0: "Clear",
+  1: "Clouds",
+  2: "Clouds",
+  3: "Clouds",
+  45: "Fog",
+  48: "Fog",
+  51: "Drizzle",
+  53: "Drizzle",
+  55: "Drizzle",
+  56: "Drizzle",
+  57: "Drizzle",
+  61: "Rain",
+  63: "Rain",
+  65: "Rain",
+  66: "Rain",
+  67: "Rain",
+  71: "Snow",
+  73: "Snow",
+  75: "Snow",
+  77: "Snow",
+  80: "Rain",
+  81: "Rain",
+  82: "Rain",
+  85: "Snow",
+  86: "Snow",
+  95: "Thunderstorm",
+  96: "Thunderstorm",
+  99: "Thunderstorm",
 };
 
 const WEATHER_SYMBOLS = {
@@ -45,6 +197,60 @@ const WEATHER_MOODS = {
   Tornado: "mood-windy",
   Clear: "mood-sunny",
   Clouds: "mood-cloudy",
+};
+
+const CONDITION_LABELS = {
+  Nepali: {
+    Thunderstorm: "मेघगर्जन",
+    Drizzle: "फुसफुसे पानी",
+    Rain: "वर्षा",
+    Snow: "हिउँ",
+    Mist: "कुहिरो",
+    Smoke: "धुवाँ",
+    Haze: "धुम्म अवस्था",
+    Dust: "धुलो",
+    Fog: "कुहिरो",
+    Sand: "बालुवायुक्त अवस्था",
+    Ash: "राखयुक्त अवस्था",
+    Squall: "तीव्र हावाहुरी",
+    Tornado: "भुमरी",
+    Clear: "साफ आकाश",
+    Clouds: "बादल",
+  },
+  Malayalam: {
+    Thunderstorm: "ഇടിമിന്നലോട് കൂടിയ കാലാവസ്ഥ",
+    Drizzle: "ചാറ്റൽമഴ",
+    Rain: "മഴ",
+    Snow: "മഞ്ഞുവീഴ്ച",
+    Mist: "മഞ്ഞ്",
+    Smoke: "പുക",
+    Haze: "മങ്ങിയ കാലാവസ്ഥ",
+    Dust: "പൊടി",
+    Fog: "കട്ടമഞ്ഞ്",
+    Sand: "മണൽ കാറ്റ്",
+    Ash: "ചാര കണങ്ങൾ",
+    Squall: "ശക്തമായ കാറ്റ്",
+    Tornado: "ചുഴലിക്കാറ്റ്",
+    Clear: "തെളിഞ്ഞ ആകാശം",
+    Clouds: "മേഘാവൃതം",
+  },
+  Telugu: {
+    Thunderstorm: "ఉరుములతో కూడిన వాతావరణం",
+    Drizzle: "చినుకులు",
+    Rain: "వర్షం",
+    Snow: "మంచు",
+    Mist: "మసకమంచు",
+    Smoke: "పొగ",
+    Haze: "మబ్బు వాతావరణం",
+    Dust: "దుమ్ము",
+    Fog: "మంచు పొగమంచు",
+    Sand: "ఇసుక గాలి",
+    Ash: "బూడిద కణాలు",
+    Squall: "బలమైన ఈదురుగాలి",
+    Tornado: "సుడిగాలి",
+    Clear: "స్పష్టమైన ఆకాశం",
+    Clouds: "మేఘావృతం",
+  },
 };
 
 const UI_TEXT = {
@@ -220,6 +426,135 @@ const UI_TEXT = {
     },
     quickCities: ["கொல்கத்தா", "டெல்லி", "மும்பை", "சென்னை", "டாக்கா", "பெங்களூரு"],
   },
+  Nepali: {
+    title: "क्षेत्रीय मौसम स्टुडियो",
+    subtitle: "inbuilt API key fallback सहित आधुनिक मौसम एप।",
+    chip: "लाइभ + स्थानीय",
+    cityLabel: "सहर",
+    cityPlaceholder: "सहर खोज्नुहोस्...",
+    languageLabel: "भाषा",
+    unitsLabel: "एकाइ",
+    celsius: "सेल्सियस",
+    fahrenheit: "फारेनहाइट",
+    apiKeyLabel: "कस्टम API key (वैकल्पिक)",
+    apiKeyPlaceholder: "खाली छोड्दा inbuilt key प्रयोग हुन्छ",
+    fetchButton: "मौसम हेर्नुहोस्",
+    quickLabel: "द्रुत सहरहरू",
+    statusReady: "तयार",
+    statusLoading: "मौसम डेटा लोड हुँदैछ...",
+    statusLocating: "तपाईंको स्थान पत्ता लगाइँदैछ...",
+    statusLoaded: "{source} बाट डेटा लोड भयो",
+    statusAutoLoaded: "तपाईंको स्थानको मौसम {source} बाट लोड भयो",
+    cityMissing: "कृपया सहरको नाम लेख्नुहोस्।",
+    cityNotFound: "सहर भेटिएन। हिज्जे जाँच्नुहोस्।",
+    locationLookupFailed: "तपाईंको हालको स्थानको मौसम ल्याउन सकिएन।",
+    locationUnsupported: "यो ब्राउजरमा geolocation समर्थन छैन।",
+    locationDenied: "स्थान अनुमति अस्वीकृत भयो। सहर हातैले लेख्नुहोस्।",
+    locationUnavailable: "अहिले तपाईंको स्थान पत्ता लगाउन सकिएन।",
+    allKeysFailed: "सबै inbuilt API key असफल भए।",
+    weatherUnavailable: "मौसम डेटा उपलब्ध छैन",
+    updatedPrefix: "अपडेट",
+    detailsTitle: "वायुमण्डलीय मेट्रिक्स",
+    detailsSubtitle: "हालको पूर्वानुमानका प्रत्यक्ष मानहरू",
+    snapshotLabel: "हालको स्थिति",
+    details: {
+      feelsLike: "अनुभूत तापक्रम",
+      humidity: "आर्द्रता",
+      wind: "हावाको गति",
+      pressure: "चाप",
+      clouds: "बादल",
+      sunrise: "सूर्योदय",
+      sunset: "सूर्यास्त",
+      source: "डेटा स्रोत",
+    },
+    quickCities: ["कोलकाता", "दिल्ली", "मुंबई", "चेन्नई", "ढाका", "बेङ्गलुरु"],
+  },
+  Malayalam: {
+    title: "പ്രാദേശിക കാലാവസ്ഥ സ്റ്റുഡിയോ",
+    subtitle: "inbuilt API key fallback ഉള്ള ആധുനിക കാലാവസ്ഥ ആപ്പ്.",
+    chip: "ലൈവ് + ലോക്കൽ",
+    cityLabel: "നഗരം",
+    cityPlaceholder: "നഗരം തിരയൂ...",
+    languageLabel: "ഭാഷ",
+    unitsLabel: "യൂണിറ്റ്",
+    celsius: "സെൽഷ്യസ്",
+    fahrenheit: "ഫാരൻഹീറ്റ്",
+    apiKeyLabel: "കസ്റ്റം API key (ഐച്ഛികം)",
+    apiKeyPlaceholder: "ശൂന്യമായി വിട്ടാൽ inbuilt key ഉപയോഗിക്കും",
+    fetchButton: "കാലാവസ്ഥ കാണുക",
+    quickLabel: "വേഗ നഗരങ്ങൾ",
+    statusReady: "തയ്യാർ",
+    statusLoading: "കാലാവസ്ഥാ ഡാറ്റ ലോഡ് ചെയ്യുന്നു...",
+    statusLocating: "നിങ്ങളുടെ ലൊക്കേഷൻ കണ്ടെത്തുന്നു...",
+    statusLoaded: "{source} വഴി ഡാറ്റ ലോഡ് ചെയ്തു",
+    statusAutoLoaded: "നിങ്ങളുടെ ലൊക്കേഷന്റെ കാലാവസ്ഥ {source} വഴി ലോഡ് ചെയ്തു",
+    cityMissing: "ദയവായി നഗരനാമം നൽകുക.",
+    cityNotFound: "നഗരം കണ്ടെത്തിയില്ല. അക്ഷരത്തെറ്റ് പരിശോധിക്കുക.",
+    locationLookupFailed: "നിങ്ങളുടെ നിലവിലെ ലൊക്കേഷന്റെ കാലാവസ്ഥ ലഭ്യമാക്കാൻ കഴിഞ്ഞില്ല.",
+    locationUnsupported: "ഈ ബ്രൗസറിൽ geolocation പിന്തുണയില്ല.",
+    locationDenied: "ലൊക്കേഷൻ അനുമതി നിഷേധിച്ചു. നഗരം കൈയോടെ നൽകുക.",
+    locationUnavailable: "ഇപ്പോൾ നിങ്ങളുടെ ലൊക്കേഷൻ കണ്ടെത്താൻ കഴിഞ്ഞില്ല.",
+    allKeysFailed: "എല്ലാ inbuilt API key-കളും പരാജയപ്പെട്ടു.",
+    weatherUnavailable: "കാലാവസ്ഥാ ഡാറ്റ ലഭ്യമല്ല",
+    updatedPrefix: "അപ്ഡേറ്റ്",
+    detailsTitle: "വായുമണ്ഡല മാനദണ്ഡങ്ങൾ",
+    detailsSubtitle: "നിലവിലെ പ്രവചനത്തിലെ തത്സമയ മൂല്യങ്ങൾ",
+    snapshotLabel: "നിലവിലെ സ്ഥിതി",
+    details: {
+      feelsLike: "അനുഭവ താപനില",
+      humidity: "ഈർപ്പം",
+      wind: "കാറ്റിന്റെ വേഗം",
+      pressure: "മർദ്ദം",
+      clouds: "മേഘാവരണം",
+      sunrise: "സൂര്യോദയം",
+      sunset: "സൂര്യാസ്തമയം",
+      source: "ഡാറ്റ ഉറവിടം",
+    },
+    quickCities: ["കൊൽക്കത്ത", "ഡൽഹി", "മുംബൈ", "ചെന്നൈ", "ഡാക്ക", "ബെംഗളൂരു"],
+  },
+  Telugu: {
+    title: "ప్రాంతీయ వాతావరణ స్టూడియో",
+    subtitle: "inbuilt API key fallback తో ఆధునిక వాతావరణ యాప్.",
+    chip: "లైవ్ + లోకల్",
+    cityLabel: "నగరం",
+    cityPlaceholder: "నగరాన్ని శోధించండి...",
+    languageLabel: "భాష",
+    unitsLabel: "యూనిట్లు",
+    celsius: "సెల్సియస్",
+    fahrenheit: "ఫారెన్‌హీట్",
+    apiKeyLabel: "కస్టమ్ API key (ఐచ్ఛికం)",
+    apiKeyPlaceholder: "ఖాళీగా వదిలితే inbuilt key ఉపయోగించబడుతుంది",
+    fetchButton: "వాతావరణం చూడండి",
+    quickLabel: "త్వరిత నగరాలు",
+    statusReady: "సిద్ధంగా ఉంది",
+    statusLoading: "వాతావరణ డేటా లోడ్ అవుతోంది...",
+    statusLocating: "మీ లొకేషన్ గుర్తిస్తోంది...",
+    statusLoaded: "{source} ద్వారా డేటా లోడ్ అయింది",
+    statusAutoLoaded: "మీ లొకేషన్ వాతావరణం {source} ద్వారా లోడ్ అయింది",
+    cityMissing: "దయచేసి నగర పేరును నమోదు చేయండి.",
+    cityNotFound: "నగరం కనబడలేదు. స్పెల్లింగ్ తనిఖీ చేయండి.",
+    locationLookupFailed: "మీ ప్రస్తుత లొకేషన్‌కు వాతావరణం పొందలేకపోయాం.",
+    locationUnsupported: "ఈ బ్రౌజర్‌లో geolocation మద్దతు లేదు.",
+    locationDenied: "లొకేషన్ అనుమతి నిరాకరించబడింది. నగరాన్ని మాన్యువల్‌గా ఇవ్వండి.",
+    locationUnavailable: "ప్రస్తుతం మీ లొకేషన్ గుర్తించలేకపోతున్నాం.",
+    allKeysFailed: "అన్ని inbuilt API keyలు విఫలమయ్యాయి.",
+    weatherUnavailable: "వాతావరణ డేటా అందుబాటులో లేదు",
+    updatedPrefix: "అప్డేట్",
+    detailsTitle: "వాతావరణ ప్రమాణాలు",
+    detailsSubtitle: "ప్రస్తుత అంచనాల నుండి లైవ్ విలువలు",
+    snapshotLabel: "ప్రస్తుత స్థితి",
+    details: {
+      feelsLike: "అనుభూతి ఉష్ణోగ్రత",
+      humidity: "ఆర్ద్రత",
+      wind: "గాలి వేగం",
+      pressure: "పీడనం",
+      clouds: "మేఘావరణం",
+      sunrise: "సూర్యోదయం",
+      sunset: "సూర్యాస్తమయం",
+      source: "డేటా మూలం",
+    },
+    quickCities: ["కొలకతా", "ఢిల్లీ", "ముంబై", "చెన్నై", "ఢాకా", "బెంగళూరు"],
+  },
 };
 
 const QUICK_CITY_QUERY = ["Kolkata", "Delhi", "Mumbai", "Chennai", "Dhaka", "Bengaluru"];
@@ -265,9 +600,17 @@ const els = {
   sunriseValue: document.getElementById("sunriseValue"),
   sunsetValue: document.getElementById("sunsetValue"),
   sourceValue: document.getElementById("sourceValue"),
+  forecastTitle: document.getElementById("forecastTitle"),
+  forecastSubtitle: document.getElementById("forecastSubtitle"),
+  forecastTrend: document.getElementById("forecastTrend"),
+  forecastList: document.getElementById("forecastList"),
+  forecastDisclaimer: document.getElementById("forecastDisclaimer"),
 };
 
 let freshAnimationTimer = null;
+let latestForecast = null;
+let forecastRequestCounter = 0;
+let forecastState = "idle";
 
 function setStatusText(message, kind = "neutral") {
   els.statusText.textContent = message;
@@ -282,6 +625,16 @@ function setStatusText(message, kind = "neutral") {
 function currentPack() {
   const language = els.languageSelect.value;
   return UI_TEXT[language] || UI_TEXT.English;
+}
+
+function currentForecastText() {
+  const language = els.languageSelect.value;
+  return FORECAST_TEXT[language] || FORECAST_TEXT.English;
+}
+
+function currentLocale() {
+  const language = els.languageSelect.value;
+  return LANGUAGE_LOCALES[language] || "en-IN";
 }
 
 function setUpdatedAtText(value) {
@@ -334,8 +687,19 @@ function applyLanguageUI() {
   els.sunriseLabel.textContent = pack.details.sunrise;
   els.sunsetLabel.textContent = pack.details.sunset;
   els.sourceLabel.textContent = pack.details.source;
+  const forecastText = currentForecastText();
+  if (els.forecastTitle) {
+    els.forecastTitle.textContent = forecastText.title;
+  }
+  if (els.forecastSubtitle) {
+    els.forecastSubtitle.textContent = forecastText.subtitle;
+  }
+  if (els.forecastDisclaimer) {
+    els.forecastDisclaimer.textContent = forecastText.disclaimer;
+  }
 
   renderQuickCities();
+  renderForecast(latestForecast);
   setUpdatedAtText("--");
 }
 
@@ -376,6 +740,9 @@ function resetWeatherDisplay(message = "") {
   els.locationText.textContent = "";
   updateDetails({});
   setWeatherMood("default");
+  forecastState = message ? "error" : "idle";
+  latestForecast = null;
+  renderForecast(null);
   els.weatherResultContainer?.classList.remove("is-fresh");
   if (message) {
     setUpdatedAtText("--");
@@ -409,11 +776,185 @@ function updateDetails(values) {
   els.sourceValue.textContent = values.source ?? "--";
 }
 
+function mapWmoToCondition(code) {
+  return WMO_TO_CONDITION[Number(code)] || "Clouds";
+}
+
+function toDisplayCondition(condition, language) {
+  const conditionMap = CONDITION_LABELS[language];
+  if (!conditionMap) {
+    return condition;
+  }
+  return conditionMap[condition] || condition;
+}
+
+function formatTrendText(items) {
+  const text = currentForecastText();
+  if (!items || !items.length) {
+    return `${text.trendPrefix}: --`;
+  }
+  const first = items.slice(0, 5);
+  const last = items.slice(-5);
+  const avg = (values) => values.reduce((sum, value) => sum + value, 0) / values.length;
+
+  const firstTemp = avg(first.map((item) => item.max));
+  const lastTemp = avg(last.map((item) => item.max));
+  const tempDelta = lastTemp - firstTemp;
+
+  const firstRain = avg(first.map((item) => item.rainChance));
+  const lastRain = avg(last.map((item) => item.rainChance));
+  const rainDelta = lastRain - firstRain;
+
+  const tempTrend = tempDelta > 1.2 ? text.warming : tempDelta < -1.2 ? text.cooling : text.stable;
+  const rainTrend = rainDelta > 8 ? text.wetter : rainDelta < -8 ? text.drier : text.stable;
+  return `${text.trendPrefix}: ${tempTrend}, ${rainTrend}`;
+}
+
+function renderForecast(forecastData) {
+  if (!els.forecastList || !els.forecastTrend) {
+    return;
+  }
+
+  const text = currentForecastText();
+  const language = els.languageSelect.value;
+  const unitSymbol = forecastData?.unitSymbol || (els.unitsSelect.value === "metric" ? "\u00B0C" : "\u00B0F");
+
+  if (!forecastData || !Array.isArray(forecastData.items) || !forecastData.items.length) {
+    const fallbackMessage =
+      forecastState === "loading"
+        ? text.loading
+        : forecastState === "error"
+          ? text.unavailable
+          : text.idle || text.unavailable;
+    els.forecastList.innerHTML = `<p class="forecast-rain">${fallbackMessage}</p>`;
+    els.forecastTrend.textContent = `${text.trendPrefix}: --`;
+    return;
+  }
+
+  const locale = currentLocale();
+  const cards = forecastData.items
+    .map((item) => {
+      const dt = new Date(item.date);
+      const dayLabel = Number.isNaN(dt.getTime())
+        ? item.date
+        : dt.toLocaleDateString(locale, { weekday: "short", day: "2-digit", month: "short" });
+      const conditionLabel = toDisplayCondition(item.condition, language);
+      const symbol = WEATHER_SYMBOLS[item.condition] || "\uD83C\uDF24";
+      return `
+        <article class="forecast-card">
+          <p class="forecast-day">${dayLabel}</p>
+          <p class="forecast-condition">${symbol} ${conditionLabel}</p>
+          <p class="forecast-temp">${Math.round(item.max)}${unitSymbol} / ${Math.round(item.min)}${unitSymbol}</p>
+          <p class="forecast-rain">${text.rainChance}: ${Math.round(item.rainChance)}%</p>
+        </article>
+      `;
+    })
+    .join("");
+
+  els.forecastList.innerHTML = cards;
+  els.forecastTrend.textContent = formatTrendText(forecastData.items);
+}
+
+function normalizeForecast(payload) {
+  const daily = payload.daily || {};
+  const time = daily.time || [];
+  const max = daily.temperature_2m_max || [];
+  const min = daily.temperature_2m_min || [];
+  const rain = daily.precipitation_probability_max || [];
+  const codes = daily.weather_code || [];
+
+  const items = [];
+  const count = Math.min(time.length, max.length, min.length, rain.length, codes.length, FORECAST_DAYS);
+  for (let idx = 0; idx < count; idx += 1) {
+    items.push({
+      date: time[idx],
+      max: Number(max[idx]),
+      min: Number(min[idx]),
+      rainChance: Number(rain[idx] ?? 0),
+      condition: mapWmoToCondition(codes[idx]),
+    });
+  }
+  return { items };
+}
+
+async function fetchForecast(latitude, longitude, units) {
+  const temperatureUnit = units === "imperial" ? "fahrenheit" : "celsius";
+  const params = new URLSearchParams({
+    latitude: String(latitude),
+    longitude: String(longitude),
+    daily: "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max",
+    forecast_days: String(FORECAST_DAYS),
+    temperature_unit: temperatureUnit,
+    timezone: "auto",
+  });
+  const response = await fetch(`${OPEN_METEO_FORECAST_ENDPOINT}?${params.toString()}`);
+  if (!response.ok) {
+    throw new Error(`Forecast API error (${response.status})`);
+  }
+  const payload = await response.json();
+  const normalized = normalizeForecast(payload);
+  normalized.unitSymbol = units === "imperial" ? "\u00B0F" : "\u00B0C";
+  return normalized;
+}
+
+async function fetchAndRenderForecast(latitude, longitude) {
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+    forecastState = "error";
+    latestForecast = null;
+    renderForecast(null);
+    return;
+  }
+
+  const ticket = forecastRequestCounter + 1;
+  forecastRequestCounter = ticket;
+  forecastState = "loading";
+  renderForecast(null);
+
+  try {
+    const forecast = await fetchForecast(latitude, longitude, els.unitsSelect.value);
+    if (ticket !== forecastRequestCounter) {
+      return;
+    }
+    forecastState = "ready";
+    latestForecast = forecast;
+    renderForecast(latestForecast);
+  } catch (error) {
+    if (ticket !== forecastRequestCounter) {
+      return;
+    }
+    forecastState = "error";
+    latestForecast = null;
+    renderForecast(null);
+  }
+}
+
+function isLikelyEnglish(text) {
+  const value = (text || "").trim();
+  if (!value) {
+    return false;
+  }
+  return /^[a-z\s-]+$/i.test(value);
+}
+
+function localizeDescription(description, condition, language) {
+  const conditionMap = CONDITION_LABELS[language];
+  if (!conditionMap) {
+    return description;
+  }
+  // OpenWeather can return English text for some locale codes.
+  if (!isLikelyEnglish(description)) {
+    return description;
+  }
+  return conditionMap[condition] || description;
+}
+
 function renderWeather(data) {
   const pack = currentPack();
+  const selectedLanguage = els.languageSelect.value;
+  const localizedDescription = localizeDescription(data.description, data.condition, selectedLanguage);
   els.conditionSymbol.textContent = data.symbol || "\uD83C\uDF24";
   els.temperatureText.textContent = `${data.temperature ?? "--"} ${data.temperatureUnit ?? ""}`.trim();
-  els.descriptionText.textContent = data.description || pack.weatherUnavailable;
+  els.descriptionText.textContent = localizedDescription || pack.weatherUnavailable;
   els.locationText.textContent = data.location || "--";
   updateDetails({
     feelsLike: `${data.feelsLike ?? "--"} ${data.temperatureUnit ?? ""}`.trim(),
@@ -427,6 +968,7 @@ function renderWeather(data) {
   });
   setStatusText(pack.statusLoaded.replace("{source}", data.source || "--"), "success");
   setWeatherMood(data.condition);
+  fetchAndRenderForecast(data.latitude, data.longitude);
   setUpdatedAtText(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
   pulseFreshResults();
 }
@@ -476,6 +1018,7 @@ function normalizeWeather(payload, units, source) {
   const wind = payload.wind || {};
   const sys = payload.sys || {};
   const clouds = payload.clouds || {};
+  const coord = payload.coord || {};
   const timezone = Number(payload.timezone || 0);
 
   const city = payload.name || "";
@@ -499,6 +1042,8 @@ function normalizeWeather(payload, units, source) {
     sunrise: formatLocalTime(sys.sunrise, timezone),
     sunset: formatLocalTime(sys.sunset, timezone),
     source,
+    latitude: Number(coord.lat),
+    longitude: Number(coord.lon),
   };
 }
 
@@ -639,6 +1184,7 @@ function initialize() {
 }
 
 initialize();
+
 
 
 

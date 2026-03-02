@@ -16,9 +16,28 @@ BUILTIN_API_KEYS = (
 
 LANGUAGE_PACKS = {
     "English": {"code": "en"},
+    "Assamese": {"code": "as"},
     "Bengali": {"code": "bn"},
+    "Bodo": {"code": "brx"},
+    "Dogri": {"code": "doi"},
+    "Gujarati": {"code": "gu"},
     "Hindi": {"code": "hi"},
+    "Kannada": {"code": "kn"},
+    "Kashmiri": {"code": "ks"},
+    "Konkani": {"code": "gom"},
+    "Maithili": {"code": "mai"},
+    "Malayalam": {"code": "ml"},
+    "Manipuri": {"code": "mni"},
+    "Marathi": {"code": "mr"},
+    "Nepali": {"code": "ne"},
+    "Odia": {"code": "or"},
+    "Punjabi": {"code": "pa"},
+    "Sanskrit": {"code": "sa"},
+    "Santali": {"code": "sat"},
+    "Sindhi": {"code": "sd"},
     "Tamil": {"code": "ta"},
+    "Telugu": {"code": "te"},
+    "Urdu": {"code": "ur"},
 }
 
 WEATHER_SYMBOLS = {

@@ -1,5 +1,5 @@
 :root {
-  --font-ui: "Outfit", "Noto Sans Bengali", "Noto Sans Devanagari", "Noto Sans Tamil", sans-serif;
+  --font-ui: "Outfit", "Noto Sans Bengali", "Noto Sans Devanagari", "Noto Sans Tamil", "Noto Sans Malayalam", "Noto Sans Telugu", sans-serif;
   --ink-1: #12243f;
   --ink-2: #3e5876;
   --ink-3: #7d92aa;
@@ -564,6 +564,79 @@ select:focus {
   color: #173f66;
   font-size: clamp(15px, 2.5vw, 18px);
   font-weight: 800;
+}
+
+.forecast-panel {
+  padding: clamp(14px, 1.8vw, 20px);
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.96), rgba(243, 251, 255, 0.9));
+}
+
+.forecast-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.forecast-trend {
+  margin: 0;
+  border: 1px solid rgba(34, 114, 177, 0.2);
+  border-radius: 999px;
+  background: rgba(243, 251, 255, 0.95);
+  color: #1f4f75;
+  padding: 7px 12px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.forecast-disclaimer {
+  margin: 8px 0 0;
+  color: var(--ink-2);
+  font-size: 12px;
+}
+
+.forecast-list {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px;
+}
+
+.forecast-card {
+  border: 1px solid rgba(20, 91, 148, 0.15);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.92);
+  padding: 10px;
+  display: grid;
+  gap: 6px;
+}
+
+.forecast-day {
+  margin: 0;
+  color: #2f628d;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.forecast-condition {
+  margin: 0;
+  color: #24547b;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.forecast-temp {
+  margin: 0;
+  color: #1a4e96;
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.forecast-rain {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: 12px;
 }
 
 body.is-loading .weather-main,
