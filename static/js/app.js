@@ -1,6 +1,7 @@
 ﻿const OPENWEATHER_ENDPOINT = "https://api.openweathermap.org/data/2.5/weather";
 const OPEN_METEO_FORECAST_ENDPOINT = 'https://api.open-meteo.com/v1/forecast';
 const FORECAST_DAYS = 15;
+const GEOLOCATION_TIMEOUT_MS = 4500;
 const BUILTIN_API_KEYS = [
   "d7842c0b970d897c608c64e6b6cc0b8a",
   "48a90ac42caa09f90dcaeee4096b9e53",
@@ -912,6 +913,17 @@ async function ensureConditionLabels(language) {
 }
 
 async function ensureLanguageResources(language) {
+  // Avoid network translation calls on first load for English.
+  if (language === "English") {
+    if (!CONDITION_LABELS.English) {
+      const englishLabels = {};
+      WEATHER_CONDITIONS.forEach((condition) => {
+        englishLabels[condition] = condition;
+      });
+      CONDITION_LABELS.English = englishLabels;
+    }
+    return;
+  }
   await Promise.all([ensureLanguagePack(language), ensureForecastText(language), ensureConditionLabels(language)]);
 }
 
@@ -1556,7 +1568,6 @@ async function fetchWeather() {
 
 async function autoFetchWeatherForCurrentLocation() {
   setLoading(true);
-  await ensureLanguageResources(els.languageSelect.value);
   const pack = currentPack();
   if (!navigator.geolocation) {
     setStatusText(pack.locationUnsupported, "error");
@@ -1568,9 +1579,9 @@ async function autoFetchWeatherForCurrentLocation() {
 
   try {
     const position = await getCurrentPosition({
-      enableHighAccuracy: true,
-      timeout: 12000,
-      maximumAge: 300000,
+      enableHighAccuracy: false,
+      timeout: GEOLOCATION_TIMEOUT_MS,
+      maximumAge: 900000,
     });
     const result = await fetchFromOpenWeather(
       {
@@ -1616,7 +1627,9 @@ function initialize() {
     }
   });
   els.cityInput.focus();
-  autoFetchWeatherForCurrentLocation();
+  window.setTimeout(() => {
+    void autoFetchWeatherForCurrentLocation();
+  }, 0);
 }
 
 initialize();
