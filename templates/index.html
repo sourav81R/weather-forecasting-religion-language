@@ -112,6 +112,14 @@
           <p id="quickCityLabel" class="quick-label">Quick cities</p>
           <div id="quickCities" class="chips"></div>
         </div>
+
+        <div class="favorite-row">
+          <div class="favorite-head">
+            <p id="favoritesLabel" class="quick-label">Saved cities</p>
+            <button id="saveCityBtn" class="ghost-btn" type="button">Save city</button>
+          </div>
+          <div id="favoriteCities" class="chips chips-saved"></div>
+        </div>
       </div>
     </section>
 
@@ -170,6 +178,31 @@
           <div class="forecast-day-item"><span id="forecastSelectedRainAmountLabel">Rain amount</span><strong id="forecastSelectedRainAmountValue">--</strong></div>
         </div>
       </div>
+    </section>
+
+    <section class="insight-grid">
+      <article class="panel insight-panel">
+        <div class="insight-head">
+          <h2 id="insightTitle" class="details-title">Weather Persona</h2>
+          <p id="comfortBadge" class="insight-badge">Comfort: --</p>
+        </div>
+        <p id="insightSummary" class="insight-summary">Search a city to generate a personalized weather narrative.</p>
+        <div id="insightTips" class="insight-tips"></div>
+      </article>
+
+      <article class="panel planner-panel">
+        <div class="insight-head">
+          <h2 id="plannerTitle" class="details-title">Best Outdoor Window</h2>
+          <p id="plannerConfidence" class="insight-badge">Confidence: --</p>
+        </div>
+        <p id="plannerWindow" class="planner-window">--</p>
+        <div class="planner-grid">
+          <div class="planner-item"><span id="plannerTempLabel">Temperature</span><strong id="plannerTempValue">--</strong></div>
+          <div class="planner-item"><span id="plannerRainLabel">Rain chance</span><strong id="plannerRainValue">--</strong></div>
+          <div class="planner-item"><span id="plannerWindLabel">Wind</span><strong id="plannerWindValue">--</strong></div>
+          <div class="planner-item"><span id="plannerUvLabel">UV index</span><strong id="plannerUvValue">--</strong></div>
+        </div>
+      </article>
     </section>
 
     <footer class="panel mini-footer" aria-hidden="true">
