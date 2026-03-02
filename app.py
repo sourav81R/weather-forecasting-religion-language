@@ -41,21 +41,21 @@ LANGUAGE_PACKS = {
 }
 
 WEATHER_SYMBOLS = {
-    "Thunderstorm": "⛈",
-    "Drizzle": "🌦",
-    "Rain": "🌧",
-    "Snow": "🌨",
-    "Mist": "🌫",
-    "Smoke": "🌫",
-    "Haze": "🌫",
-    "Dust": "🌫",
-    "Fog": "🌫",
-    "Sand": "🌫",
-    "Ash": "🌫",
-    "Squall": "💨",
-    "Tornado": "🌪",
-    "Clear": "☀",
-    "Clouds": "☁",
+    "Thunderstorm": "\u26C8",
+    "Drizzle": "\U0001F326",
+    "Rain": "\U0001F327",
+    "Snow": "\U0001F328",
+    "Mist": "\U0001F32B",
+    "Smoke": "\U0001F32B",
+    "Haze": "\U0001F32B",
+    "Dust": "\U0001F32B",
+    "Fog": "\U0001F32B",
+    "Sand": "\U0001F32B",
+    "Ash": "\U0001F32B",
+    "Squall": "\U0001F4A8",
+    "Tornado": "\U0001F32A",
+    "Clear": "\u2600",
+    "Clouds": "\u2601",
 }
 
 
@@ -160,6 +160,7 @@ def _normalize_weather(data: dict[str, Any], units: str, source: str) -> dict[st
     wind = data.get("wind") or {}
     sys_info = data.get("sys") or {}
     clouds = data.get("clouds") or {}
+    coord = data.get("coord") or {}
     timezone_offset = int(data.get("timezone", 0))
 
     city = data.get("name", "")
@@ -167,7 +168,7 @@ def _normalize_weather(data: dict[str, Any], units: str, source: str) -> dict[st
     location = f"{city}, {country}" if country else city
 
     condition_main = weather.get("main", "")
-    temp_unit = "°C" if units == "metric" else "°F"
+    temp_unit = "\u00B0C" if units == "metric" else "\u00B0F"
     wind_unit = "m/s" if units == "metric" else "mph"
 
     return {
@@ -176,7 +177,7 @@ def _normalize_weather(data: dict[str, Any], units: str, source: str) -> dict[st
         "temperatureUnit": temp_unit,
         "description": weather.get("description", ""),
         "condition": condition_main,
-        "symbol": WEATHER_SYMBOLS.get(condition_main, "🌤"),
+        "symbol": WEATHER_SYMBOLS.get(condition_main, "\U0001F324"),
         "feelsLike": main.get("feels_like"),
         "humidity": main.get("humidity"),
         "windSpeed": wind.get("speed"),
@@ -186,6 +187,8 @@ def _normalize_weather(data: dict[str, Any], units: str, source: str) -> dict[st
         "sunrise": _format_local_time(sys_info.get("sunrise"), timezone_offset),
         "sunset": _format_local_time(sys_info.get("sunset"), timezone_offset),
         "source": _source_label(source),
+        "latitude": coord.get("lat"),
+        "longitude": coord.get("lon"),
         "updatedAtUtc": dt.datetime.utcnow().isoformat(timespec="seconds") + "Z",
     }
 

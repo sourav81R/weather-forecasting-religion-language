@@ -561,6 +561,90 @@ select:focus {
   background: rgba(12, 34, 63, 0.86);
 }
 
+.favorite-row {
+  display: grid;
+  gap: 8px;
+}
+
+.favorite-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.chips-saved {
+  min-height: 36px;
+}
+
+.chip-placeholder {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.saved-chip {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(160, 206, 255, 0.28);
+  border-radius: var(--radius-pill);
+  background: rgba(11, 27, 52, 0.74);
+  overflow: hidden;
+}
+
+.saved-city-btn,
+.saved-city-remove {
+  border: 0;
+  color: #cae7ff;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.saved-city-btn {
+  padding: 8px 10px 8px 12px;
+}
+
+.saved-city-remove {
+  border-left: 1px solid rgba(166, 211, 255, 0.2);
+  padding: 8px 9px;
+  color: #a9ccf0;
+}
+
+.saved-city-btn:hover,
+.saved-city-remove:hover {
+  background: rgba(15, 38, 70, 0.86);
+}
+
+.ghost-btn {
+  border: 1px solid rgba(166, 211, 255, 0.26);
+  border-radius: var(--radius-pill);
+  background: rgba(10, 24, 48, 0.62);
+  color: #cae7ff;
+  min-height: 34px;
+  padding: 7px 12px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.32px;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease, transform 0.15s ease;
+}
+
+.ghost-btn:hover {
+  border-color: rgba(169, 217, 255, 0.52);
+  background: rgba(13, 34, 64, 0.85);
+  transform: translateY(-1px);
+}
+
+.ghost-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
 .content-grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -869,6 +953,108 @@ button.forecast-card:focus-visible {
   font-weight: 800;
 }
 
+.insight-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.insight-panel,
+.planner-panel {
+  padding: clamp(14px, 1.8vw, 22px);
+}
+
+.insight-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.insight-badge {
+  margin: 0;
+  border: 1px solid rgba(164, 209, 255, 0.24);
+  border-radius: var(--radius-pill);
+  background: rgba(9, 24, 48, 0.62);
+  color: #cae7ff;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 7px 12px;
+  white-space: nowrap;
+}
+
+.insight-badge.score-high {
+  color: #88efbe;
+}
+
+.insight-badge.score-mid {
+  color: #ffe18a;
+}
+
+.insight-badge.score-low {
+  color: #ff9c9c;
+}
+
+.insight-summary {
+  margin: 10px 0 0;
+  color: #d0e8ff;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.insight-tips {
+  margin-top: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.insight-tip {
+  border: 1px solid rgba(160, 206, 255, 0.2);
+  border-radius: 12px;
+  background: rgba(10, 28, 56, 0.62);
+  padding: 9px 10px;
+  color: #cce4ff;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.planner-window {
+  margin: 10px 0 0;
+  color: #94daff;
+  font-size: clamp(18px, 2.6vw, 22px);
+  font-weight: 800;
+}
+
+.planner-grid {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px;
+}
+
+.planner-item {
+  border: 1px solid rgba(160, 206, 255, 0.2);
+  border-radius: 12px;
+  background: rgba(10, 28, 56, 0.68);
+  padding: 9px 10px;
+  display: grid;
+  gap: 4px;
+}
+
+.planner-item span {
+  color: #9fc8ed;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.44px;
+}
+
+.planner-item strong {
+  color: #d8ecff;
+  font-size: 14px;
+  font-weight: 800;
+}
+
 .mini-footer {
   padding: 11px 14px;
   text-align: center;
@@ -883,7 +1069,9 @@ button.forecast-card:focus-visible {
 
 body.is-loading .weather-main,
 body.is-loading .weather-details,
-body.is-loading .forecast-panel {
+body.is-loading .forecast-panel,
+body.is-loading .insight-panel,
+body.is-loading .planner-panel {
   opacity: 0.7;
 }
 
@@ -993,6 +1181,10 @@ body.is-loading .forecast-panel {
     grid-template-columns: minmax(0, 1.08fr) minmax(0, 0.92fr);
     gap: 14px;
   }
+
+  .insight-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
 }
 
 @media (max-width: 1099px) {
@@ -1081,6 +1273,14 @@ body.is-loading .forecast-panel {
     background: #5c8fbe;
     border-radius: 999px;
   }
+
+  .favorite-head {
+    flex-wrap: wrap;
+  }
+
+  .ghost-btn {
+    width: 100%;
+  }
 }
 
 @media (max-width: 768px) {
@@ -1150,6 +1350,11 @@ body.is-loading .forecast-panel {
 
   .forecast-day-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .insight-head {
+    flex-direction: column;
+    align-items: flex-start;
   }
 
   .settings-grid {
@@ -1247,6 +1452,9 @@ body.is-loading .forecast-panel {
   .panel:hover,
   .detail-item:hover,
   .chip:hover,
+  .saved-city-btn:hover,
+  .saved-city-remove:hover,
+  .ghost-btn:hover,
   button.forecast-card:hover,
   .primary-btn:hover {
     transform: none;

@@ -682,8 +682,52 @@ const translationRequestCache = new Map();
 const languagePackRequestCache = new Map();
 const forecastTextRequestCache = new Map();
 const conditionLabelRequestCache = new Map();
+const experienceTextRequestCache = new Map();
 
 const QUICK_CITY_QUERY = ["Kolkata", "Delhi", "Mumbai", "Chennai", "Dhaka", "Bengaluru"];
+const FAVORITES_STORAGE_KEY = "regional-weather-studio-favorites-v1";
+const MAX_FAVORITES = 8;
+
+const EXPERIENCE_TEXT = {
+  English: {
+    favoritesLabel: "Saved cities",
+    saveCityButton: "Save city",
+    emptyFavorites: "No saved cities yet.",
+    noCityToSave: "Search a city first to save it.",
+    citySavedStatus: "{city} saved to favorites.",
+    cityRemovedStatus: "{city} removed from favorites.",
+    cityAlreadySavedStatus: "{city} is already in favorites.",
+    removeCityLabel: "Remove",
+    insightTitle: "Weather Persona",
+    insightIdle: "Search a city to generate a personalized weather narrative.",
+    insightSummaryTemplate: "{location}: {description}. {comfortPrefix} {score}/100 ({band}).",
+    insightSummaryBasicTemplate: "{location}: {description}.",
+    insightComfortPrefix: "Comfort",
+    insightComfortHigh: "Excellent",
+    insightComfortMid: "Balanced",
+    insightComfortLow: "Harsh",
+    tipWarm: "Light layers should be comfortable for most outdoor plans.",
+    tipCold: "Keep a warm layer ready, especially in early morning and evening.",
+    tipHumid: "Humidity is high, so stay hydrated and prefer breathable fabrics.",
+    tipWindy: "Winds are stronger than usual, so secure loose items outdoors.",
+    tipRainy: "Rain chance is elevated in upcoming days; keep a rain backup.",
+    tipDry: "Rain chance is limited in the next few days, ideal for commute windows.",
+    plannerTitle: "Best Outdoor Window",
+    plannerIdle: "Load weather to compute the best 3-hour outdoor window.",
+    plannerLoading: "Computing best outdoor window...",
+    plannerUnavailable: "Could not compute a reliable outdoor window.",
+    plannerConfidencePrefix: "Confidence",
+    plannerConfidenceHigh: "High",
+    plannerConfidenceMid: "Medium",
+    plannerConfidenceLow: "Low",
+    plannerTempLabel: "Temperature",
+    plannerRainLabel: "Rain chance",
+    plannerWindLabel: "Wind",
+    plannerUvLabel: "UV index",
+  },
+};
+
+const EXPERIENCE_TRANSLATABLE_KEYS = Object.keys(EXPERIENCE_TEXT.English);
 
 const els = {
   titleText: document.getElementById("titleText"),
@@ -703,6 +747,9 @@ const els = {
   statusText: document.getElementById("statusText"),
   quickCityLabel: document.getElementById("quickCityLabel"),
   quickCities: document.getElementById("quickCities"),
+  favoritesLabel: document.getElementById("favoritesLabel"),
+  saveCityBtn: document.getElementById("saveCityBtn"),
+  favoriteCities: document.getElementById("favoriteCities"),
   conditionSymbol: document.getElementById("conditionSymbol"),
   temperatureText: document.getElementById("temperatureText"),
   descriptionText: document.getElementById("descriptionText"),
@@ -742,6 +789,21 @@ const els = {
   forecastSelectedRainValue: document.getElementById("forecastSelectedRainValue"),
   forecastSelectedRainAmountLabel: document.getElementById("forecastSelectedRainAmountLabel"),
   forecastSelectedRainAmountValue: document.getElementById("forecastSelectedRainAmountValue"),
+  insightTitle: document.getElementById("insightTitle"),
+  comfortBadge: document.getElementById("comfortBadge"),
+  insightSummary: document.getElementById("insightSummary"),
+  insightTips: document.getElementById("insightTips"),
+  plannerTitle: document.getElementById("plannerTitle"),
+  plannerConfidence: document.getElementById("plannerConfidence"),
+  plannerWindow: document.getElementById("plannerWindow"),
+  plannerTempLabel: document.getElementById("plannerTempLabel"),
+  plannerTempValue: document.getElementById("plannerTempValue"),
+  plannerRainLabel: document.getElementById("plannerRainLabel"),
+  plannerRainValue: document.getElementById("plannerRainValue"),
+  plannerWindLabel: document.getElementById("plannerWindLabel"),
+  plannerWindValue: document.getElementById("plannerWindValue"),
+  plannerUvLabel: document.getElementById("plannerUvLabel"),
+  plannerUvValue: document.getElementById("plannerUvValue"),
 };
 
 let freshAnimationTimer = null;
@@ -752,6 +814,10 @@ let forecastState = "idle";
 let selectedForecastDate = "";
 let uiLanguageRequestCounter = 0;
 let weatherDescriptionRequestCounter = 0;
+let plannerRequestCounter = 0;
+let plannerState = "idle";
+let latestPlannerWindow = null;
+let favoriteCitiesState = [];
 
 function translationTargetsFor(language) {
   const candidates = LANGUAGE_TRANSLATION_TARGETS[language] || [LANGUAGE_CODES[language], "hi"];
@@ -889,6 +955,30 @@ async function ensureForecastText(language) {
   return request;
 }
 
+async function ensureExperienceText(language) {
+  if (EXPERIENCE_TEXT[language]) {
+    return EXPERIENCE_TEXT[language];
+  }
+  if (experienceTextRequestCache.has(language)) {
+    return experienceTextRequestCache.get(language);
+  }
+  const base = EXPERIENCE_TEXT.English;
+  const request = Promise.all(EXPERIENCE_TRANSLATABLE_KEYS.map((key) => translateText(base[key], language)))
+    .then((translated) => {
+      const pack = { ...base };
+      EXPERIENCE_TRANSLATABLE_KEYS.forEach((key, idx) => {
+        pack[key] = translated[idx] || base[key];
+      });
+      EXPERIENCE_TEXT[language] = pack;
+      return pack;
+    })
+    .finally(() => {
+      experienceTextRequestCache.delete(language);
+    });
+  experienceTextRequestCache.set(language, request);
+  return request;
+}
+
 async function ensureConditionLabels(language) {
   if (CONDITION_LABELS[language]) {
     return CONDITION_LABELS[language];
@@ -924,7 +1014,12 @@ async function ensureLanguageResources(language) {
     }
     return;
   }
-  await Promise.all([ensureLanguagePack(language), ensureForecastText(language), ensureConditionLabels(language)]);
+  await Promise.all([
+    ensureLanguagePack(language),
+    ensureForecastText(language),
+    ensureConditionLabels(language),
+    ensureExperienceText(language),
+  ]);
 }
 
 function setStatusText(message, kind = "neutral") {
@@ -947,9 +1042,22 @@ function currentForecastText() {
   return FORECAST_TEXT[language] || FORECAST_TEXT.English;
 }
 
+function currentExperienceText() {
+  const language = els.languageSelect.value;
+  return EXPERIENCE_TEXT[language] || EXPERIENCE_TEXT.English;
+}
+
 function currentLocale() {
   const language = els.languageSelect.value;
   return LANGUAGE_LOCALES[language] || "en-IN";
+}
+
+function fillTemplate(template, replacements) {
+  let output = String(template || "");
+  Object.entries(replacements || {}).forEach(([key, value]) => {
+    output = output.replace(new RegExp(`\\{${key}\\}`, "g"), String(value));
+  });
+  return output;
 }
 
 function setUpdatedAtText(value) {
@@ -966,6 +1074,511 @@ function setWeatherMood(condition) {
   document.body.dataset.weather = moodKey;
   document.body.className = document.body.className.replace(/\bmood-\S+/g, "").trim();
   document.body.classList.add(WEATHER_MOODS[moodKey] || "mood-default");
+}
+
+function toFiniteNumber(value) {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : null;
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function normalizeCityName(value) {
+  return String(value || "").replace(/\s+/g, " ").trim();
+}
+
+function cityLookupKey(value) {
+  return normalizeCityName(value).toLowerCase();
+}
+
+function cityFromLocation(value) {
+  return normalizeCityName(String(value || "").split(",")[0]);
+}
+
+function currentCityCandidate() {
+  const typed = normalizeCityName(els.cityInput?.value || "");
+  if (typed) {
+    return typed;
+  }
+  return cityFromLocation(latestWeatherData?.location || "");
+}
+
+function loadFavoriteCities() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(FAVORITES_STORAGE_KEY) || "[]");
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    const unique = [];
+    const seen = new Set();
+    parsed.forEach((city) => {
+      const normalized = normalizeCityName(city);
+      const key = cityLookupKey(normalized);
+      if (!normalized || seen.has(key)) {
+        return;
+      }
+      seen.add(key);
+      unique.push(normalized);
+    });
+    return unique.slice(0, MAX_FAVORITES);
+  } catch (error) {
+    return [];
+  }
+}
+
+function persistFavoriteCities() {
+  try {
+    localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(favoriteCitiesState));
+  } catch (error) {
+    // Ignore storage write errors in restricted/private contexts.
+  }
+}
+
+function setSaveCityButtonState() {
+  if (!els.saveCityBtn) {
+    return;
+  }
+  els.saveCityBtn.disabled = !currentCityCandidate();
+}
+
+function renderFavoriteCities() {
+  if (!els.favoriteCities) {
+    return;
+  }
+  const text = currentExperienceText();
+  els.favoriteCities.innerHTML = "";
+
+  if (!favoriteCitiesState.length) {
+    const empty = document.createElement("p");
+    empty.className = "chip-placeholder";
+    empty.textContent = text.emptyFavorites;
+    els.favoriteCities.appendChild(empty);
+    setSaveCityButtonState();
+    return;
+  }
+
+  favoriteCitiesState.forEach((city) => {
+    const wrap = document.createElement("div");
+    wrap.className = "saved-chip";
+
+    const openBtn = document.createElement("button");
+    openBtn.type = "button";
+    openBtn.className = "saved-city-btn";
+    openBtn.textContent = city;
+    openBtn.addEventListener("click", () => {
+      els.cityInput.value = city;
+      fetchWeather();
+    });
+
+    const removeBtn = document.createElement("button");
+    removeBtn.type = "button";
+    removeBtn.className = "saved-city-remove";
+    removeBtn.textContent = "x";
+    removeBtn.setAttribute("aria-label", `${text.removeCityLabel} ${city}`);
+    removeBtn.title = text.removeCityLabel;
+    removeBtn.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      removeFavoriteCity(city);
+    });
+
+    wrap.appendChild(openBtn);
+    wrap.appendChild(removeBtn);
+    els.favoriteCities.appendChild(wrap);
+  });
+
+  setSaveCityButtonState();
+}
+
+function addFavoriteCity(rawCity) {
+  const city = normalizeCityName(rawCity);
+  const text = currentExperienceText();
+  if (!city) {
+    setStatusText(text.noCityToSave, "error");
+    return;
+  }
+  const key = cityLookupKey(city);
+  if (favoriteCitiesState.some((entry) => cityLookupKey(entry) === key)) {
+    setStatusText(fillTemplate(text.cityAlreadySavedStatus, { city }), "neutral");
+    setSaveCityButtonState();
+    return;
+  }
+  favoriteCitiesState = [city, ...favoriteCitiesState.filter((entry) => cityLookupKey(entry) !== key)].slice(0, MAX_FAVORITES);
+  persistFavoriteCities();
+  renderFavoriteCities();
+  setStatusText(fillTemplate(text.citySavedStatus, { city }), "success");
+}
+
+function removeFavoriteCity(rawCity) {
+  const city = normalizeCityName(rawCity);
+  const key = cityLookupKey(city);
+  if (!key) {
+    return;
+  }
+  const hasCity = favoriteCitiesState.some((entry) => cityLookupKey(entry) === key);
+  if (!hasCity) {
+    return;
+  }
+  favoriteCitiesState = favoriteCitiesState.filter((entry) => cityLookupKey(entry) !== key);
+  persistFavoriteCities();
+  renderFavoriteCities();
+  setStatusText(fillTemplate(currentExperienceText().cityRemovedStatus, { city }), "neutral");
+}
+
+function toCelsius(value, unitSymbol) {
+  if (unitSymbol === "\u00B0F") {
+    return ((Number(value) - 32) * 5) / 9;
+  }
+  return Number(value);
+}
+
+function toKmh(value, windUnit) {
+  if (windUnit === "mph") {
+    return Number(value) * 1.60934;
+  }
+  if (windUnit === "m/s") {
+    return Number(value) * 3.6;
+  }
+  return Number(value);
+}
+
+function computeComfortScore(data) {
+  if (!data) {
+    return null;
+  }
+  const feelsLike = toFiniteNumber(data.feelsLike);
+  const humidity = toFiniteNumber(data.humidity);
+  const wind = toFiniteNumber(data.windSpeed);
+  if (feelsLike === null || humidity === null || wind === null) {
+    return null;
+  }
+
+  const tempC = toCelsius(feelsLike, data.temperatureUnit);
+  const windKmh = toKmh(wind, data.windUnit);
+  const tempPenalty = Math.abs(tempC - 24) * 2.5;
+  const humidityPenalty = Math.abs(humidity - 52) * 0.45;
+  const windPenalty = Math.max(windKmh - 14, 0) * 0.85;
+  const score = clamp(100 - tempPenalty - humidityPenalty - windPenalty, 0, 100);
+  return Math.round(score);
+}
+
+function describeComfort(score) {
+  const text = currentExperienceText();
+  if (!Number.isFinite(score)) {
+    return { label: "--", className: "" };
+  }
+  if (score >= 74) {
+    return { label: text.insightComfortHigh, className: "score-high" };
+  }
+  if (score >= 48) {
+    return { label: text.insightComfortMid, className: "score-mid" };
+  }
+  return { label: text.insightComfortLow, className: "score-low" };
+}
+
+function buildInsightTips(weatherData, forecastData) {
+  const text = currentExperienceText();
+  const tips = [];
+  const feelsLike = toFiniteNumber(weatherData?.feelsLike);
+  const humidity = toFiniteNumber(weatherData?.humidity);
+  const wind = toFiniteNumber(weatherData?.windSpeed);
+  const tempC = feelsLike === null ? null : toCelsius(feelsLike, weatherData.temperatureUnit);
+  const windKmh = wind === null ? null : toKmh(wind, weatherData.windUnit);
+
+  if (tempC !== null && tempC <= 17) {
+    tips.push(text.tipCold);
+  } else {
+    tips.push(text.tipWarm);
+  }
+
+  if (humidity !== null && humidity >= 72) {
+    tips.push(text.tipHumid);
+  }
+  if (windKmh !== null && windKmh >= 26) {
+    tips.push(text.tipWindy);
+  }
+
+  const upcoming = Array.isArray(forecastData?.items) ? forecastData.items.slice(0, 4) : [];
+  if (upcoming.length) {
+    const rainAvg = upcoming.reduce((sum, item) => sum + Number(item.rainChance || 0), 0) / upcoming.length;
+    tips.push(rainAvg >= 40 ? text.tipRainy : text.tipDry);
+  }
+
+  return tips.filter(Boolean).slice(0, 3);
+}
+
+function renderInsights() {
+  if (!els.insightSummary || !els.insightTips || !els.comfortBadge || !els.insightTitle) {
+    return;
+  }
+
+  const text = currentExperienceText();
+  els.insightTitle.textContent = text.insightTitle;
+
+  if (!latestWeatherData) {
+    els.comfortBadge.classList.remove("score-high", "score-mid", "score-low");
+    els.comfortBadge.textContent = `${text.insightComfortPrefix}: --`;
+    els.insightSummary.textContent = text.insightIdle;
+    els.insightTips.innerHTML = "";
+    return;
+  }
+
+  const score = computeComfortScore(latestWeatherData);
+  const mood = describeComfort(score);
+  els.comfortBadge.classList.remove("score-high", "score-mid", "score-low");
+  if (mood.className) {
+    els.comfortBadge.classList.add(mood.className);
+  }
+  els.comfortBadge.textContent = Number.isFinite(score)
+    ? `${text.insightComfortPrefix}: ${score}/100 (${mood.label})`
+    : `${text.insightComfortPrefix}: --`;
+
+  const description = els.descriptionText.textContent || latestWeatherData.description || currentPack().weatherUnavailable;
+  const location = latestWeatherData.location || "--";
+  if (Number.isFinite(score)) {
+    els.insightSummary.textContent = fillTemplate(text.insightSummaryTemplate, {
+      location,
+      description,
+      comfortPrefix: text.insightComfortPrefix,
+      score,
+      band: mood.label,
+    });
+  } else {
+    els.insightSummary.textContent = fillTemplate(text.insightSummaryBasicTemplate, {
+      location,
+      description,
+    });
+  }
+
+  const tips = buildInsightTips(latestWeatherData, latestForecast);
+  els.insightTips.innerHTML = "";
+  tips.forEach((tip) => {
+    const tipNode = document.createElement("p");
+    tipNode.className = "insight-tip";
+    tipNode.textContent = tip;
+    els.insightTips.appendChild(tipNode);
+  });
+}
+
+function formatPlannerSlotLabel(startIso, endIso) {
+  const start = new Date(startIso);
+  const end = new Date(endIso);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return "--";
+  }
+  const locale = currentLocale();
+  const day = start.toLocaleDateString(locale, { weekday: "short", day: "2-digit", month: "short" });
+  const from = start.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
+  const to = end.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
+  return `${day}, ${from} - ${to}`;
+}
+
+function plannerConfidenceBand(score) {
+  const text = currentExperienceText();
+  if (!Number.isFinite(score)) {
+    return { label: "--", className: "" };
+  }
+  if (score >= 74) {
+    return { label: text.plannerConfidenceHigh, className: "score-high" };
+  }
+  if (score >= 48) {
+    return { label: text.plannerConfidenceMid, className: "score-mid" };
+  }
+  return { label: text.plannerConfidenceLow, className: "score-low" };
+}
+
+function renderPlannerWindow(plannerData) {
+  if (
+    !els.plannerTitle ||
+    !els.plannerConfidence ||
+    !els.plannerWindow ||
+    !els.plannerTempValue ||
+    !els.plannerRainValue ||
+    !els.plannerWindValue ||
+    !els.plannerUvValue
+  ) {
+    return;
+  }
+
+  const text = currentExperienceText();
+  els.plannerTitle.textContent = text.plannerTitle;
+  els.plannerTempLabel.textContent = text.plannerTempLabel;
+  els.plannerRainLabel.textContent = text.plannerRainLabel;
+  els.plannerWindLabel.textContent = text.plannerWindLabel;
+  els.plannerUvLabel.textContent = text.plannerUvLabel;
+
+  if (!plannerData) {
+    const message =
+      plannerState === "loading"
+        ? text.plannerLoading
+        : plannerState === "error"
+          ? text.plannerUnavailable
+          : text.plannerIdle;
+    els.plannerConfidence.classList.remove("score-high", "score-mid", "score-low");
+    els.plannerConfidence.textContent = `${text.plannerConfidencePrefix}: --`;
+    els.plannerWindow.textContent = message;
+    els.plannerTempValue.textContent = "--";
+    els.plannerRainValue.textContent = "--";
+    els.plannerWindValue.textContent = "--";
+    els.plannerUvValue.textContent = "--";
+    return;
+  }
+
+  const band = plannerConfidenceBand(plannerData.score);
+  els.plannerConfidence.classList.remove("score-high", "score-mid", "score-low");
+  if (band.className) {
+    els.plannerConfidence.classList.add(band.className);
+  }
+  els.plannerConfidence.textContent = `${text.plannerConfidencePrefix}: ${band.label}`;
+  els.plannerWindow.textContent = formatPlannerSlotLabel(plannerData.start, plannerData.end);
+  els.plannerTempValue.textContent = `${Math.round(plannerData.avgTemp)}${plannerData.tempUnitSymbol}`;
+  els.plannerRainValue.textContent = `${Math.round(plannerData.avgRainChance)}%`;
+  els.plannerWindValue.textContent = `${Math.round(plannerData.avgWind)} ${plannerData.windUnit}`;
+  els.plannerUvValue.textContent = Number(plannerData.maxUv).toFixed(1);
+}
+
+function scoreHourlyPoint(item, units) {
+  const tempC = units === "imperial" ? ((item.temperature - 32) * 5) / 9 : item.temperature;
+  const windKmh = units === "imperial" ? item.windSpeed * 1.60934 : item.windSpeed;
+  const tempPenalty = Math.abs(tempC - 24) * 2.4;
+  const rainPenalty = item.rainChance * 0.56;
+  const windPenalty = Math.max(windKmh - 16, 0) * 1.2;
+  const uvPenalty = Math.max(item.uvIndex - 5.5, 0) * 6;
+  return clamp(100 - tempPenalty - rainPenalty - windPenalty - uvPenalty, 0, 100);
+}
+
+function normalizePlannerHourly(payload) {
+  const hourly = payload.hourly || {};
+  const times = hourly.time || [];
+  const temps = hourly.temperature_2m || [];
+  const rains = hourly.precipitation_probability || [];
+  const winds = hourly.wind_speed_10m || [];
+  const uvs = hourly.uv_index || [];
+  const count = Math.min(times.length, temps.length, rains.length, winds.length, uvs.length);
+  const points = [];
+
+  for (let idx = 0; idx < count; idx += 1) {
+    const when = new Date(times[idx]);
+    if (Number.isNaN(when.getTime())) {
+      continue;
+    }
+    points.push({
+      time: times[idx],
+      dateObj: when,
+      temperature: Number(temps[idx]),
+      rainChance: Number(rains[idx] ?? 0),
+      windSpeed: Number(winds[idx]),
+      uvIndex: Number(uvs[idx] ?? 0),
+    });
+  }
+  return points;
+}
+
+function isSequentialHourWindow(items) {
+  for (let idx = 0; idx < items.length - 1; idx += 1) {
+    const diff = items[idx + 1].dateObj.getTime() - items[idx].dateObj.getTime();
+    if (diff !== 60 * 60 * 1000) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function computeBestPlannerWindow(points, units) {
+  if (!Array.isArray(points) || points.length < 3) {
+    return null;
+  }
+  let best = null;
+
+  for (let idx = 0; idx <= points.length - 3; idx += 1) {
+    const windowItems = points.slice(idx, idx + 3);
+    if (!isSequentialHourWindow(windowItems)) {
+      continue;
+    }
+    const startHour = windowItems[0].dateObj.getHours();
+    if (startHour < 6 || startHour > 18) {
+      continue;
+    }
+    const scores = windowItems.map((item) => scoreHourlyPoint(item, units));
+    const avgScore = scores.reduce((sum, value) => sum + value, 0) / scores.length;
+    if (!best || avgScore > best.score) {
+      best = {
+        score: avgScore,
+        start: windowItems[0].time,
+        end: windowItems[windowItems.length - 1].time,
+        avgTemp: windowItems.reduce((sum, item) => sum + item.temperature, 0) / windowItems.length,
+        avgRainChance: windowItems.reduce((sum, item) => sum + item.rainChance, 0) / windowItems.length,
+        avgWind: windowItems.reduce((sum, item) => sum + item.windSpeed, 0) / windowItems.length,
+        maxUv: Math.max(...windowItems.map((item) => item.uvIndex)),
+      };
+    }
+  }
+
+  return best;
+}
+
+async function fetchPlanner(latitude, longitude, units) {
+  const params = new URLSearchParams({
+    latitude: String(latitude),
+    longitude: String(longitude),
+    hourly: "temperature_2m,precipitation_probability,wind_speed_10m,uv_index",
+    forecast_days: "2",
+    temperature_unit: units === "imperial" ? "fahrenheit" : "celsius",
+    wind_speed_unit: units === "imperial" ? "mph" : "kmh",
+    timezone: "auto",
+  });
+  const response = await fetch(`${OPEN_METEO_FORECAST_ENDPOINT}?${params.toString()}`);
+  if (!response.ok) {
+    throw new Error(`Planner API error (${response.status})`);
+  }
+  const payload = await response.json();
+  const points = normalizePlannerHourly(payload);
+  const best = computeBestPlannerWindow(points, units);
+  if (!best) {
+    return null;
+  }
+  best.tempUnitSymbol = units === "imperial" ? "\u00B0F" : "\u00B0C";
+  best.windUnit = units === "imperial" ? "mph" : "km/h";
+  return best;
+}
+
+async function fetchAndRenderPlanner(latitude, longitude) {
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+    plannerState = "error";
+    latestPlannerWindow = null;
+    renderPlannerWindow(null);
+    return;
+  }
+
+  const ticket = plannerRequestCounter + 1;
+  plannerRequestCounter = ticket;
+  plannerState = "loading";
+  renderPlannerWindow(null);
+
+  try {
+    const planner = await fetchPlanner(latitude, longitude, els.unitsSelect.value);
+    if (ticket !== plannerRequestCounter) {
+      return;
+    }
+    if (!planner) {
+      plannerState = "error";
+      latestPlannerWindow = null;
+      renderPlannerWindow(null);
+      return;
+    }
+    plannerState = "ready";
+    latestPlannerWindow = planner;
+    renderPlannerWindow(planner);
+  } catch (error) {
+    if (ticket !== plannerRequestCounter) {
+      return;
+    }
+    plannerState = "error";
+    latestPlannerWindow = null;
+    renderPlannerWindow(null);
+  }
 }
 
 async function applyLanguageUI() {
@@ -989,6 +1602,13 @@ async function applyLanguageUI() {
   els.apiKeyInput.placeholder = pack.apiKeyPlaceholder;
   els.fetchBtn.textContent = pack.fetchButton;
   els.quickCityLabel.textContent = pack.quickLabel;
+  const experienceText = currentExperienceText();
+  if (els.favoritesLabel) {
+    els.favoritesLabel.textContent = experienceText.favoritesLabel;
+  }
+  if (els.saveCityBtn) {
+    els.saveCityBtn.textContent = experienceText.saveCityButton;
+  }
   setStatusText(pack.statusReady, "neutral");
   els.unitsSelect.options[0].textContent = pack.celsius;
   els.unitsSelect.options[1].textContent = pack.fahrenheit;
@@ -1037,8 +1657,11 @@ async function applyLanguageUI() {
   }
 
   renderQuickCities();
+  renderFavoriteCities();
   refreshWeatherLanguage();
+  renderInsights();
   renderForecast(latestForecast);
+  renderPlannerWindow(latestPlannerWindow);
   setUpdatedAtText("--");
 }
 
@@ -1062,6 +1685,9 @@ function setLoading(isLoading) {
   const pack = currentPack();
   els.fetchBtn.disabled = isLoading;
   els.fetchBtn.setAttribute("aria-busy", String(isLoading));
+  if (els.saveCityBtn) {
+    els.saveCityBtn.disabled = isLoading || !currentCityCandidate();
+  }
   document.body.classList.toggle("is-loading", isLoading);
   els.fetchBtn.classList.toggle("is-loading", isLoading);
   if (isLoading) {
@@ -1083,8 +1709,13 @@ function resetWeatherDisplay(message = "") {
   forecastState = message ? "error" : "idle";
   selectedForecastDate = "";
   latestForecast = null;
+  plannerState = message ? "error" : "idle";
+  latestPlannerWindow = null;
   renderForecast(null);
+  renderPlannerWindow(null);
+  renderInsights();
   els.weatherResultContainer?.classList.remove("is-fresh");
+  setSaveCityButtonState();
   if (message) {
     setUpdatedAtText("--");
   }
@@ -1138,6 +1769,7 @@ function refreshWeatherLanguage() {
     });
   }
   setStatusText(pack.statusLoaded.replace("{source}", latestWeatherData.source || "--"), "success");
+  renderInsights();
 }
 
 function mapWmoToCondition(code) {
@@ -1228,6 +1860,7 @@ function renderForecast(forecastData) {
     els.forecastList.innerHTML = `<p class="forecast-rain">${fallbackMessage}</p>`;
     els.forecastTrend.textContent = `${text.trendPrefix}: --`;
     renderSelectedForecastDetails(null, unitSymbol, language);
+    renderInsights();
     return;
   }
 
@@ -1275,6 +1908,7 @@ function renderForecast(forecastData) {
   }
   renderSelectedForecastDetails(selectedItem, unitSymbol, language);
   els.forecastTrend.textContent = formatTrendText(forecastData.items);
+  renderInsights();
 }
 
 function normalizeForecast(payload) {
@@ -1412,6 +2046,9 @@ function renderWeather(data) {
   setStatusText(pack.statusLoaded.replace("{source}", data.source || "--"), "success");
   setWeatherMood(data.condition);
   fetchAndRenderForecast(data.latitude, data.longitude);
+  fetchAndRenderPlanner(data.latitude, data.longitude);
+  renderInsights();
+  setSaveCityButtonState();
   setUpdatedAtText(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
   pulseFreshResults();
 }
@@ -1615,11 +2252,21 @@ async function autoFetchWeatherForCurrentLocation() {
 }
 
 function initialize() {
+  favoriteCitiesState = loadFavoriteCities();
   void applyLanguageUI();
   setWeatherMood("default");
+  renderFavoriteCities();
+  renderInsights();
+  renderPlannerWindow(null);
   els.fetchBtn.addEventListener("click", fetchWeather);
+  els.saveCityBtn?.addEventListener("click", () => {
+    addFavoriteCity(currentCityCandidate());
+  });
   els.languageSelect.addEventListener("change", () => {
     void applyLanguageUI();
+  });
+  els.cityInput.addEventListener("input", () => {
+    setSaveCityButtonState();
   });
   els.cityInput.addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
@@ -1627,6 +2274,7 @@ function initialize() {
     }
   });
   els.cityInput.focus();
+  setSaveCityButtonState();
   window.setTimeout(() => {
     void autoFetchWeatherForCurrentLocation();
   }, 0);
