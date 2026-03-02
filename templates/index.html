@@ -6,10 +6,16 @@
   <title>Regional Weather Studio</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Noto+Sans+Bengali:wght@400;600;700&family=Noto+Sans+Devanagari:wght@400;600;700&family=Noto+Sans+Tamil:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Sora:wght@400;500;600;700;800&family=Noto+Sans+Bengali:wght@400;600;700&family=Noto+Sans+Devanagari:wght@400;600;700&family=Noto+Sans+Tamil:wght@400;600;700&family=Noto+Sans+Malayalam:wght@400;600;700&family=Noto+Sans+Telugu:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/app.css">
 </head>
-<body data-weather="default">
+<body data-weather="default" class="mood-default">
+  <div class="fx-layer" aria-hidden="true">
+    <span class="fx-orb fx-orb-a"></span>
+    <span class="fx-orb fx-orb-b"></span>
+    <span class="fx-grid"></span>
+  </div>
+
   <main class="app-shell">
     <header class="hero panel">
       <div class="hero-top">
@@ -17,63 +23,95 @@
         <p id="updatedAtText" class="updated-at">Updated: --</p>
       </div>
 
-      <div class="hero-body">
-        <div>
+      <div class="hero-layout">
+        <div class="hero-copy">
           <h1 id="titleText">Regional Weather Studio</h1>
           <p id="subtitleText">Modern weather app with inbuilt API key fallback for static hosting.</p>
+          <div class="hero-tags" aria-hidden="true">
+            <span class="hero-tag">Realtime</span>
+            <span class="hero-tag">Location Aware</span>
+            <span class="hero-tag">Multilingual</span>
+          </div>
         </div>
-        <div class="hero-tags" aria-hidden="true">
-          <span class="hero-tag">Realtime</span>
-          <span class="hero-tag">Location Aware</span>
-          <span class="hero-tag">Multilingual</span>
-        </div>
-      </div>
 
-      <span class="hero-orb hero-orb-a" aria-hidden="true"></span>
-      <span class="hero-orb hero-orb-b" aria-hidden="true"></span>
+        <aside class="hero-side" aria-hidden="true">
+          <p class="hero-side-kicker">Atmosphere</p>
+          <p class="hero-side-line">Dynamic mood-driven theme</p>
+          <p class="hero-side-line">15-day trend explorer</p>
+          <p class="hero-side-line">Localized weather narratives</p>
+        </aside>
+      </div>
     </header>
 
-    <section class="panel search-panel">
-      <div class="city-row">
-        <label id="cityLabel" for="cityInput">City</label>
-        <div class="search-box">
-          <input id="cityInput" name="city" type="text" placeholder="Search city..." autocomplete="off">
-          <button id="fetchBtn" class="primary-btn" type="button">Get Weather</button>
+    <section class="panel control-panel">
+      <div class="control-head">
+        <h2 class="control-title">Search Weather Intelligence</h2>
+        <p class="control-subtitle">Choose location, language, and units. Forecast refreshes instantly.</p>
+      </div>
+
+      <div class="control-grid">
+        <div class="city-row">
+          <label id="cityLabel" for="cityInput">City</label>
+          <div class="search-box">
+            <input id="cityInput" name="city" type="text" placeholder="Search city..." autocomplete="off">
+            <button id="fetchBtn" class="primary-btn" type="button">Get Weather</button>
+          </div>
+        </div>
+
+        <div class="settings-grid">
+          <div class="field-block">
+            <label id="languageLabel" for="languageSelect">Language</label>
+            <select id="languageSelect" name="language">
+              <option value="English">English</option>
+              <option value="Assamese">Assamese</option>
+              <option value="Bengali">Bengali</option>
+              <option value="Bodo">Bodo</option>
+              <option value="Dogri">Dogri</option>
+              <option value="Gujarati">Gujarati</option>
+              <option value="Hindi">Hindi</option>
+              <option value="Kannada">Kannada</option>
+              <option value="Kashmiri">Kashmiri</option>
+              <option value="Konkani">Konkani</option>
+              <option value="Maithili">Maithili</option>
+              <option value="Malayalam">Malayalam</option>
+              <option value="Manipuri">Manipuri</option>
+              <option value="Marathi">Marathi</option>
+              <option value="Nepali">Nepali</option>
+              <option value="Odia">Odia</option>
+              <option value="Punjabi">Punjabi</option>
+              <option value="Sanskrit">Sanskrit</option>
+              <option value="Santali">Santali</option>
+              <option value="Sindhi">Sindhi</option>
+              <option value="Tamil">Tamil</option>
+              <option value="Telugu">Telugu</option>
+              <option value="Urdu">Urdu</option>
+            </select>
+          </div>
+
+          <div class="field-block">
+            <label id="unitsLabel" for="unitsSelect">Units</label>
+            <select id="unitsSelect" name="units">
+              <option value="metric">Celsius</option>
+              <option value="imperial">Fahrenheit</option>
+            </select>
+          </div>
+
+          <div class="field-block field-wide">
+            <label id="apiKeyLabel" for="apiKeyInput">Custom API key (optional)</label>
+            <input id="apiKeyInput" name="apiKey" type="password" placeholder="Uses inbuilt keys if empty">
+          </div>
         </div>
       </div>
 
-      <div class="settings-grid">
-        <div class="field-block">
-          <label id="languageLabel" for="languageSelect">Language</label>
-          <select id="languageSelect" name="language">
-            <option value="English">English</option>
-            <option value="Bengali">Bengali</option>
-            <option value="Hindi">Hindi</option>
-            <option value="Tamil">Tamil</option>
-          </select>
+      <div class="control-foot">
+        <div class="status-row">
+          <p id="statusText" class="status-text" aria-live="polite">Ready</p>
         </div>
 
-        <div class="field-block">
-          <label id="unitsLabel" for="unitsSelect">Units</label>
-          <select id="unitsSelect" name="units">
-            <option value="metric">Celsius</option>
-            <option value="imperial">Fahrenheit</option>
-          </select>
+        <div class="quick-row">
+          <p id="quickCityLabel" class="quick-label">Quick cities</p>
+          <div id="quickCities" class="chips"></div>
         </div>
-
-        <div class="field-block field-wide">
-          <label id="apiKeyLabel" for="apiKeyInput">Custom API key (optional)</label>
-          <input id="apiKeyInput" name="apiKey" type="password" placeholder="Uses inbuilt keys if empty">
-        </div>
-      </div>
-
-      <div class="status-row">
-        <p id="statusText" class="status-text" aria-live="polite">Ready</p>
-      </div>
-
-      <div class="quick-row">
-        <p id="quickCityLabel" class="quick-label">Quick cities</p>
-        <div id="quickCities" class="chips"></div>
       </div>
     </section>
 
@@ -109,8 +147,36 @@
         </div>
       </article>
     </section>
+
+    <section class="panel forecast-panel" aria-live="polite">
+      <div class="forecast-head">
+        <div>
+          <h2 id="forecastTitle" class="details-title">15-Day Outlook</h2>
+          <p id="forecastSubtitle" class="details-subtitle">Expected changes in temperature and rain probability.</p>
+        </div>
+        <p id="forecastTrend" class="forecast-trend">Expected change: --</p>
+      </div>
+
+      <p id="forecastDisclaimer" class="forecast-disclaimer">Forecast values can differ from Google because providers and weather models are different.</p>
+      <div id="forecastList" class="forecast-list"></div>
+
+      <div id="forecastDayDetails" class="forecast-day-details">
+        <p id="forecastSelectedTitle" class="forecast-selected-title">Selected day details</p>
+        <p id="forecastSelectedDate" class="forecast-selected-date">--</p>
+        <div class="forecast-day-grid">
+          <div class="forecast-day-item"><span id="forecastSelectedConditionLabel">Condition</span><strong id="forecastSelectedConditionValue">--</strong></div>
+          <div class="forecast-day-item"><span id="forecastSelectedTempLabel">High / Low</span><strong id="forecastSelectedTempValue">--</strong></div>
+          <div class="forecast-day-item"><span id="forecastSelectedRainLabel">Rain chance</span><strong id="forecastSelectedRainValue">--</strong></div>
+          <div class="forecast-day-item"><span id="forecastSelectedRainAmountLabel">Rain amount</span><strong id="forecastSelectedRainAmountValue">--</strong></div>
+        </div>
+      </div>
+    </section>
+
+    <footer class="panel mini-footer" aria-hidden="true">
+      <p>Live feed fusion: OpenWeather + Open-Meteo</p>
+    </footer>
   </main>
 
-  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+  <script src="/static/js/app.js"></script>
 </body>
 </html>
