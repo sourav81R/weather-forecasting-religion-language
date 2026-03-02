@@ -1,7 +1,9 @@
 ﻿const OPENWEATHER_ENDPOINT = "https://api.openweathermap.org/data/2.5/weather";
 const OPEN_METEO_FORECAST_ENDPOINT = 'https://api.open-meteo.com/v1/forecast';
 const FORECAST_DAYS = 15;
-const GEOLOCATION_TIMEOUT_MS = 4500;
+const GEOLOCATION_TIMEOUT_MS = 12000;
+const GEOLOCATION_RETRY_TIMEOUT_MS = 20000;
+const LAST_KNOWN_COORDS_STORAGE_KEY = "regional-weather-last-known-coords-v1";
 const BUILTIN_API_KEYS = [
   "d7842c0b970d897c608c64e6b6cc0b8a",
   "48a90ac42caa09f90dcaeee4096b9e53",
@@ -2082,6 +2084,86 @@ function getCurrentPosition(options) {
   });
 }
 
+function isValidCoordinate(value) {
+  const num = Number(value);
+  return Number.isFinite(num);
+}
+
+function saveLastKnownCoords(latitude, longitude) {
+  if (!isValidCoordinate(latitude) || !isValidCoordinate(longitude)) {
+    return;
+  }
+  try {
+    localStorage.setItem(
+      LAST_KNOWN_COORDS_STORAGE_KEY,
+      JSON.stringify({ latitude: Number(latitude), longitude: Number(longitude), at: Date.now() })
+    );
+  } catch (error) {
+    // Ignore storage write failures.
+  }
+}
+
+function readLastKnownCoords() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(LAST_KNOWN_COORDS_STORAGE_KEY) || "{}");
+    if (!isValidCoordinate(parsed.latitude) || !isValidCoordinate(parsed.longitude)) {
+      return null;
+    }
+    return {
+      latitude: Number(parsed.latitude),
+      longitude: Number(parsed.longitude),
+    };
+  } catch (error) {
+    return null;
+  }
+}
+
+async function fetchCoordinatesFromIp() {
+  const providers = [
+    async () => {
+      const response = await fetch("https://ipapi.co/json/");
+      if (!response.ok) {
+        return null;
+      }
+      const payload = await response.json();
+      const latitude = Number(payload.latitude);
+      const longitude = Number(payload.longitude);
+      if (!isValidCoordinate(latitude) || !isValidCoordinate(longitude)) {
+        return null;
+      }
+      return { latitude, longitude };
+    },
+    async () => {
+      const response = await fetch("https://ipwho.is/");
+      if (!response.ok) {
+        return null;
+      }
+      const payload = await response.json();
+      if (payload && payload.success === false) {
+        return null;
+      }
+      const latitude = Number(payload.latitude);
+      const longitude = Number(payload.longitude);
+      if (!isValidCoordinate(latitude) || !isValidCoordinate(longitude)) {
+        return null;
+      }
+      return { latitude, longitude };
+    },
+  ];
+
+  for (const provider of providers) {
+    try {
+      const coords = await provider();
+      if (coords) {
+        return coords;
+      }
+    } catch (error) {
+      // Continue to next provider.
+    }
+  }
+  return null;
+}
+
 function formatLocalTime(unixTs, timezoneOffsetSeconds) {
   if (!unixTs) {
     return "--";
@@ -2206,24 +2288,75 @@ async function fetchWeather() {
 async function autoFetchWeatherForCurrentLocation() {
   setLoading(true);
   const pack = currentPack();
-  if (!navigator.geolocation) {
-    setStatusText(pack.locationUnsupported, "error");
-    setLoading(false);
-    return;
-  }
-
   setStatusText(pack.statusLocating, "neutral");
 
+  let geoError = null;
+  let coords = null;
+
   try {
-    const position = await getCurrentPosition({
-      enableHighAccuracy: false,
-      timeout: GEOLOCATION_TIMEOUT_MS,
-      maximumAge: 900000,
-    });
+    if (navigator.geolocation) {
+      try {
+        const position = await getCurrentPosition({
+          enableHighAccuracy: false,
+          timeout: GEOLOCATION_TIMEOUT_MS,
+          maximumAge: 900000,
+        });
+        coords = {
+          latitude: Number(position.coords.latitude),
+          longitude: Number(position.coords.longitude),
+        };
+      } catch (error) {
+        geoError = error;
+        // Retry once with more time and high-accuracy request if the first attempt timed out.
+        if (error && Number(error.code) === 3) {
+          try {
+            const retryPosition = await getCurrentPosition({
+              enableHighAccuracy: true,
+              timeout: GEOLOCATION_RETRY_TIMEOUT_MS,
+              maximumAge: 0,
+            });
+            coords = {
+              latitude: Number(retryPosition.coords.latitude),
+              longitude: Number(retryPosition.coords.longitude),
+            };
+          } catch (retryError) {
+            geoError = retryError;
+          }
+        }
+      }
+    } else {
+      geoError = { code: 0 };
+    }
+
+    if (!coords) {
+      const cachedCoords = readLastKnownCoords();
+      if (cachedCoords) {
+        coords = cachedCoords;
+      }
+    }
+
+    if (!coords) {
+      const ipCoords = await fetchCoordinatesFromIp();
+      if (ipCoords) {
+        coords = ipCoords;
+      }
+    }
+
+    if (!coords) {
+      if (geoError && Number(geoError.code) === 1) {
+        setStatusText(pack.locationDenied, "error");
+      } else if (!navigator.geolocation) {
+        setStatusText(pack.locationUnsupported, "error");
+      } else {
+        setStatusText(pack.locationUnavailable, "error");
+      }
+      return;
+    }
+
     const result = await fetchFromOpenWeather(
       {
-        lat: position.coords.latitude.toString(),
-        lon: position.coords.longitude.toString(),
+        lat: coords.latitude.toString(),
+        lon: coords.longitude.toString(),
       },
       els.languageSelect.value,
       els.unitsSelect.value,
@@ -2236,12 +2369,16 @@ async function autoFetchWeatherForCurrentLocation() {
     }
 
     renderWeather(result.data);
+    saveLastKnownCoords(
+      isValidCoordinate(result.data.latitude) ? result.data.latitude : coords.latitude,
+      isValidCoordinate(result.data.longitude) ? result.data.longitude : coords.longitude
+    );
     if (result.data.location) {
       els.cityInput.value = result.data.location.split(",")[0].trim();
     }
     setStatusText(pack.statusAutoLoaded.replace("{source}", result.data.source || "--"), "success");
   } catch (error) {
-    if (error && error.code === 1) {
+    if (error && Number(error.code) === 1) {
       setStatusText(pack.locationDenied, "error");
     } else {
       setStatusText(pack.locationUnavailable, "error");
