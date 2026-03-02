@@ -612,6 +612,86 @@ select:focus {
   gap: 6px;
 }
 
+button.forecast-card {
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  transition: transform 0.16s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+button.forecast-card:hover {
+  transform: translateY(-1px);
+  border-color: rgba(20, 91, 148, 0.28);
+}
+
+button.forecast-card:focus-visible {
+  outline: none;
+  border-color: #2e73b7;
+  box-shadow: 0 0 0 4px var(--focus);
+}
+
+.forecast-card.is-selected {
+  border-color: rgba(26, 119, 214, 0.5);
+  box-shadow: 0 8px 20px rgba(26, 119, 214, 0.16);
+  background: linear-gradient(150deg, rgba(238, 248, 255, 0.96), rgba(248, 253, 255, 0.95));
+}
+
+.forecast-day-details {
+  margin-top: 12px;
+  border: 1px solid rgba(20, 91, 148, 0.15);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.94);
+  padding: 12px;
+}
+
+.forecast-selected-title {
+  margin: 0;
+  color: #2f628d;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.28px;
+  text-transform: uppercase;
+}
+
+.forecast-selected-date {
+  margin: 6px 0 0;
+  color: #1a4e96;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.forecast-day-grid {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px;
+}
+
+.forecast-day-item {
+  border: 1px solid rgba(20, 91, 148, 0.15);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.94);
+  padding: 9px 10px;
+  display: grid;
+  gap: 4px;
+}
+
+.forecast-day-item span {
+  color: #2f628d;
+  font-size: 11px;
+  letter-spacing: 0.28px;
+  text-transform: uppercase;
+  font-weight: 800;
+}
+
+.forecast-day-item strong {
+  color: #173f66;
+  font-size: 14px;
+  font-weight: 800;
+}
+
 .forecast-day {
   margin: 0;
   color: #2f628d;

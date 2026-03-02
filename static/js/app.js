@@ -32,6 +32,42 @@ const LANGUAGE_CODES = {
   Urdu: "ur",
 };
 
+const OPENWEATHER_LANGUAGE_FALLBACK = {
+  Bodo: "hi",
+  Dogri: "hi",
+  Konkani: "mr",
+  Maithili: "hi",
+  Manipuri: "hi",
+  Santali: "hi",
+  Sanskrit: "hi",
+};
+
+const LANGUAGE_TRANSLATION_TARGETS = {
+  English: ["en"],
+  Assamese: ["as", "hi"],
+  Bengali: ["bn", "hi"],
+  Bodo: ["brx", "hi"],
+  Dogri: ["doi", "hi"],
+  Gujarati: ["gu", "hi"],
+  Hindi: ["hi"],
+  Kannada: ["kn", "hi"],
+  Kashmiri: ["ks", "ur", "hi"],
+  Konkani: ["gom", "mr", "hi"],
+  Maithili: ["mai", "hi"],
+  Malayalam: ["ml", "hi"],
+  Manipuri: ["mni-Mtei", "mni", "hi"],
+  Marathi: ["mr", "hi"],
+  Nepali: ["ne", "hi"],
+  Odia: ["or", "hi"],
+  Punjabi: ["pa", "hi"],
+  Sanskrit: ["sa", "hi"],
+  Santali: ["sat", "hi"],
+  Sindhi: ["sd", "ur", "hi"],
+  Tamil: ["ta", "hi"],
+  Telugu: ["te", "hi"],
+  Urdu: ["ur", "hi"],
+};
+
 const LANGUAGE_LOCALES = {
   English: "en-IN",
   Assamese: "as-IN",
@@ -62,7 +98,11 @@ const FORECAST_TEXT = {
     loading: "Loading 15-day forecast...",
     unavailable: "15-day forecast unavailable right now.",
     idle: "Search a city to load the 15-day outlook.",
+    selectedDayTitle: "Selected day details",
+    conditionLabel: "Condition",
+    tempRangeLabel: "High / Low",
     rainChance: "Rain chance",
+    rainAmountLabel: "Rain amount",
     disclaimer: "Forecast values can differ from Google because providers and weather models are different.",
     warming: "warmer",
     cooling: "cooler",
@@ -77,7 +117,11 @@ const FORECAST_TEXT = {
     loading: "15-दिन का पूर्वानुमान लोड हो रहा है...",
     unavailable: "अभी 15-दिन का पूर्वानुमान उपलब्ध नहीं है।",
     idle: "15-दिन का पूर्वानुमान देखने के लिए शहर खोजें।",
+    selectedDayTitle: "चुने गए दिन का विवरण",
+    conditionLabel: "स्थिति",
+    tempRangeLabel: "अधिकतम / न्यूनतम",
     rainChance: "बारिश की संभावना",
+    rainAmountLabel: "बारिश की मात्रा",
     disclaimer: "Google और इस ऐप में अंतर हो सकता है क्योंकि डेटा स्रोत और मौसम मॉडल अलग होते हैं।",
     warming: "गर्म",
     cooling: "ठंडा",
@@ -92,7 +136,11 @@ const FORECAST_TEXT = {
     loading: "१५-दिने पूर्वानुमान लोड हुँदैछ...",
     unavailable: "अहिले १५-दिने पूर्वानुमान उपलब्ध छैन।",
     idle: "१५-दिने पूर्वानुमान हेर्न सहर खोज्नुहोस्।",
+    selectedDayTitle: "छानिएको दिनको विवरण",
+    conditionLabel: "अवस्था",
+    tempRangeLabel: "उच्च / न्यून",
     rainChance: "वर्षाको सम्भावना",
+    rainAmountLabel: "वर्षा मात्रा",
     disclaimer: "Google सँग फरक देखिन सक्छ किनकि डेटा स्रोत र मौसम मोडेल फरक हुन्छन्।",
     warming: "तातो हुँदै",
     cooling: "चिसिँदै",
@@ -107,7 +155,11 @@ const FORECAST_TEXT = {
     loading: "15 ദിവസത്തെ പ്രവചനം ലോഡ് ചെയ്യുന്നു...",
     unavailable: "ഇപ്പോൾ 15 ദിവസത്തെ പ്രവചനം ലഭ്യമല്ല.",
     idle: "15 ദിവസത്തെ പ്രവചനം കാണാൻ ഒരു നഗരം തിരയുക.",
+    selectedDayTitle: "തിരഞ്ഞെടുത്ത ദിവസത്തിന്റെ വിശദാംശങ്ങൾ",
+    conditionLabel: "സ്ഥിതി",
+    tempRangeLabel: "പരമാവധി / കുറഞ്ഞത്",
     rainChance: "മഴ സാധ്യത",
+    rainAmountLabel: "മഴയുടെ അളവ്",
     disclaimer: "ഡാറ്റ ഉറവിടവും മോഡലുകളും വ്യത്യസ്തമായതിനാൽ Google-നേക്കാൾ വ്യത്യാസം വരാം.",
     warming: "കൂടുതൽ ചൂട്",
     cooling: "കൂടുതൽ തണുപ്പ്",
@@ -122,7 +174,11 @@ const FORECAST_TEXT = {
     loading: "15-రోజుల అంచనా లోడ్ అవుతోంది...",
     unavailable: "ప్రస్తుతం 15-రోజుల అంచనా అందుబాటులో లేదు.",
     idle: "15-రోజుల అంచనా చూడటానికి నగరాన్ని వెతకండి.",
+    selectedDayTitle: "ఎంచుకున్న రోజు వివరాలు",
+    conditionLabel: "పరిస్థితి",
+    tempRangeLabel: "గరిష్టం / కనిష్టం",
     rainChance: "వర్ష అవకాశం",
+    rainAmountLabel: "వర్ష పరిమాణం",
     disclaimer: "డేటా సోర్స్ మరియు మోడల్స్ వేరుగా ఉండటం వల్ల Google తో తేడాలు రావచ్చు.",
     warming: "ఎక్కువ వేడి",
     cooling: "ఎక్కువ చలి",
@@ -557,6 +613,75 @@ const UI_TEXT = {
   },
 };
 
+const UI_TRANSLATABLE_KEYS = [
+  "title",
+  "subtitle",
+  "chip",
+  "cityLabel",
+  "cityPlaceholder",
+  "languageLabel",
+  "unitsLabel",
+  "celsius",
+  "fahrenheit",
+  "apiKeyLabel",
+  "apiKeyPlaceholder",
+  "fetchButton",
+  "quickLabel",
+  "statusReady",
+  "statusLoading",
+  "statusLocating",
+  "statusLoaded",
+  "statusAutoLoaded",
+  "cityMissing",
+  "cityNotFound",
+  "locationLookupFailed",
+  "locationUnsupported",
+  "locationDenied",
+  "locationUnavailable",
+  "allKeysFailed",
+  "weatherUnavailable",
+  "updatedPrefix",
+  "detailsTitle",
+  "detailsSubtitle",
+  "snapshotLabel",
+];
+const UI_DETAIL_TRANSLATABLE_KEYS = [
+  "feelsLike",
+  "humidity",
+  "wind",
+  "pressure",
+  "clouds",
+  "sunrise",
+  "sunset",
+  "source",
+];
+const FORECAST_TRANSLATABLE_KEYS = [
+  "title",
+  "subtitle",
+  "trendPrefix",
+  "loading",
+  "unavailable",
+  "idle",
+  "selectedDayTitle",
+  "conditionLabel",
+  "tempRangeLabel",
+  "rainChance",
+  "rainAmountLabel",
+  "disclaimer",
+  "warming",
+  "cooling",
+  "stable",
+  "wetter",
+  "drier",
+];
+const WEATHER_CONDITIONS = Object.keys(WEATHER_SYMBOLS);
+
+const translationCache = new Map();
+const translationRequestCache = new Map();
+const languagePackRequestCache = new Map();
+const forecastTextRequestCache = new Map();
+const conditionLabelRequestCache = new Map();
+
 const QUICK_CITY_QUERY = ["Kolkata", "Delhi", "Mumbai", "Chennai", "Dhaka", "Bengaluru"];
 
 const els = {
@@ -605,12 +730,190 @@ const els = {
   forecastTrend: document.getElementById("forecastTrend"),
   forecastList: document.getElementById("forecastList"),
   forecastDisclaimer: document.getElementById("forecastDisclaimer"),
+  forecastDayDetails: document.getElementById("forecastDayDetails"),
+  forecastSelectedTitle: document.getElementById("forecastSelectedTitle"),
+  forecastSelectedDate: document.getElementById("forecastSelectedDate"),
+  forecastSelectedConditionLabel: document.getElementById("forecastSelectedConditionLabel"),
+  forecastSelectedConditionValue: document.getElementById("forecastSelectedConditionValue"),
+  forecastSelectedTempLabel: document.getElementById("forecastSelectedTempLabel"),
+  forecastSelectedTempValue: document.getElementById("forecastSelectedTempValue"),
+  forecastSelectedRainLabel: document.getElementById("forecastSelectedRainLabel"),
+  forecastSelectedRainValue: document.getElementById("forecastSelectedRainValue"),
+  forecastSelectedRainAmountLabel: document.getElementById("forecastSelectedRainAmountLabel"),
+  forecastSelectedRainAmountValue: document.getElementById("forecastSelectedRainAmountValue"),
 };
 
 let freshAnimationTimer = null;
+let latestWeatherData = null;
 let latestForecast = null;
 let forecastRequestCounter = 0;
 let forecastState = "idle";
+let selectedForecastDate = "";
+let uiLanguageRequestCounter = 0;
+let weatherDescriptionRequestCounter = 0;
+
+function translationTargetsFor(language) {
+  const candidates = LANGUAGE_TRANSLATION_TARGETS[language] || [LANGUAGE_CODES[language], "hi"];
+  return candidates.filter((code, idx) => Boolean(code) && candidates.indexOf(code) === idx);
+}
+
+function tokenizeTemplatePlaceholders(value) {
+  const placeholders = [];
+  const text = String(value || "");
+  const tokenized = text.replace(/\{[^}]+\}/g, (match) => {
+    const token = `__PH_${placeholders.length}__`;
+    placeholders.push({ token, match });
+    return token;
+  });
+  return { tokenized, placeholders };
+}
+
+function restoreTemplatePlaceholders(value, placeholders) {
+  return placeholders.reduce((acc, item) => acc.replace(item.token, item.match), value);
+}
+
+function readGoogleTranslatePayload(payload) {
+  if (!Array.isArray(payload) || !Array.isArray(payload[0])) {
+    return "";
+  }
+  return payload[0].map((chunk) => (Array.isArray(chunk) ? chunk[0] : "")).join("").trim();
+}
+
+async function requestGoogleTranslation(text, target) {
+  const cacheKey = `${target}::${text}`;
+  if (translationCache.has(cacheKey)) {
+    return translationCache.get(cacheKey);
+  }
+  if (translationRequestCache.has(cacheKey)) {
+    return translationRequestCache.get(cacheKey);
+  }
+
+  const request = (async () => {
+    const { tokenized, placeholders } = tokenizeTemplatePlaceholders(text);
+    const url =
+      `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&dt=t&tl=${encodeURIComponent(target)}` +
+      `&q=${encodeURIComponent(tokenized)}`;
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`Translate API error (${response.status})`);
+    }
+    const payload = await response.json();
+    const translated = readGoogleTranslatePayload(payload);
+    const restored = restoreTemplatePlaceholders(translated || String(text), placeholders);
+    translationCache.set(cacheKey, restored);
+    return restored;
+  })()
+    .catch(() => String(text))
+    .finally(() => {
+      translationRequestCache.delete(cacheKey);
+    });
+
+  translationRequestCache.set(cacheKey, request);
+  return request;
+}
+
+async function translateText(text, language) {
+  const input = String(text ?? "");
+  if (!input || language === "English") {
+    return input;
+  }
+  const targets = translationTargetsFor(language);
+  for (const target of targets) {
+    const translated = await requestGoogleTranslation(input, target);
+    if (translated && translated.toLowerCase() !== input.toLowerCase()) {
+      return translated;
+    }
+  }
+  return input;
+}
+
+async function buildTranslatedUiPack(language) {
+  const base = UI_TEXT.English;
+  const translatedValues = await Promise.all(UI_TRANSLATABLE_KEYS.map((key) => translateText(base[key], language)));
+  const translatedDetails = await Promise.all(
+    UI_DETAIL_TRANSLATABLE_KEYS.map((key) => translateText(base.details[key], language))
+  );
+  const translatedQuickCities = await Promise.all(base.quickCities.map((city) => translateText(city, language)));
+
+  const nextPack = { ...base, details: { ...base.details }, quickCities: translatedQuickCities };
+  UI_TRANSLATABLE_KEYS.forEach((key, idx) => {
+    nextPack[key] = translatedValues[idx] || base[key];
+  });
+  UI_DETAIL_TRANSLATABLE_KEYS.forEach((key, idx) => {
+    nextPack.details[key] = translatedDetails[idx] || base.details[key];
+  });
+  return nextPack;
+}
+
+async function ensureLanguagePack(language) {
+  if (UI_TEXT[language]) {
+    return UI_TEXT[language];
+  }
+  if (languagePackRequestCache.has(language)) {
+    return languagePackRequestCache.get(language);
+  }
+  const request = buildTranslatedUiPack(language)
+    .then((pack) => {
+      UI_TEXT[language] = pack;
+      return pack;
+    })
+    .finally(() => {
+      languagePackRequestCache.delete(language);
+    });
+  languagePackRequestCache.set(language, request);
+  return request;
+}
+
+async function ensureForecastText(language) {
+  if (FORECAST_TEXT[language]) {
+    return FORECAST_TEXT[language];
+  }
+  if (forecastTextRequestCache.has(language)) {
+    return forecastTextRequestCache.get(language);
+  }
+  const base = FORECAST_TEXT.English;
+  const request = Promise.all(FORECAST_TRANSLATABLE_KEYS.map((key) => translateText(base[key], language)))
+    .then((translated) => {
+      const pack = { ...base };
+      FORECAST_TRANSLATABLE_KEYS.forEach((key, idx) => {
+        pack[key] = translated[idx] || base[key];
+      });
+      FORECAST_TEXT[language] = pack;
+      return pack;
+    })
+    .finally(() => {
+      forecastTextRequestCache.delete(language);
+    });
+  forecastTextRequestCache.set(language, request);
+  return request;
+}
+
+async function ensureConditionLabels(language) {
+  if (CONDITION_LABELS[language]) {
+    return CONDITION_LABELS[language];
+  }
+  if (conditionLabelRequestCache.has(language)) {
+    return conditionLabelRequestCache.get(language);
+  }
+  const request = Promise.all(WEATHER_CONDITIONS.map((condition) => translateText(condition, language)))
+    .then((translated) => {
+      const labels = {};
+      WEATHER_CONDITIONS.forEach((condition, idx) => {
+        labels[condition] = translated[idx] || condition;
+      });
+      CONDITION_LABELS[language] = labels;
+      return labels;
+    })
+    .finally(() => {
+      conditionLabelRequestCache.delete(language);
+    });
+  conditionLabelRequestCache.set(language, request);
+  return request;
+}
+
+async function ensureLanguageResources(language) {
+  await Promise.all([ensureLanguagePack(language), ensureForecastText(language), ensureConditionLabels(language)]);
+}
 
 function setStatusText(message, kind = "neutral") {
   els.statusText.textContent = message;
@@ -653,7 +956,15 @@ function setWeatherMood(condition) {
   document.body.classList.add(WEATHER_MOODS[moodKey] || "mood-default");
 }
 
-function applyLanguageUI() {
+async function applyLanguageUI() {
+  const requestId = uiLanguageRequestCounter + 1;
+  uiLanguageRequestCounter = requestId;
+  const selectedLanguage = els.languageSelect.value;
+  await ensureLanguageResources(selectedLanguage);
+  if (requestId !== uiLanguageRequestCounter || selectedLanguage !== els.languageSelect.value) {
+    return;
+  }
+
   const pack = currentPack();
   els.titleText.textContent = pack.title;
   els.subtitleText.textContent = pack.subtitle;
@@ -697,8 +1008,24 @@ function applyLanguageUI() {
   if (els.forecastDisclaimer) {
     els.forecastDisclaimer.textContent = forecastText.disclaimer;
   }
+  if (els.forecastSelectedTitle) {
+    els.forecastSelectedTitle.textContent = forecastText.selectedDayTitle || "Selected day details";
+  }
+  if (els.forecastSelectedConditionLabel) {
+    els.forecastSelectedConditionLabel.textContent = forecastText.conditionLabel || "Condition";
+  }
+  if (els.forecastSelectedTempLabel) {
+    els.forecastSelectedTempLabel.textContent = forecastText.tempRangeLabel || "High / Low";
+  }
+  if (els.forecastSelectedRainLabel) {
+    els.forecastSelectedRainLabel.textContent = forecastText.rainChance || "Rain chance";
+  }
+  if (els.forecastSelectedRainAmountLabel) {
+    els.forecastSelectedRainAmountLabel.textContent = forecastText.rainAmountLabel || "Rain amount";
+  }
 
   renderQuickCities();
+  refreshWeatherLanguage();
   renderForecast(latestForecast);
   setUpdatedAtText("--");
 }
@@ -739,8 +1066,10 @@ function resetWeatherDisplay(message = "") {
   els.descriptionText.textContent = message ? pack.weatherUnavailable : "";
   els.locationText.textContent = "";
   updateDetails({});
+  latestWeatherData = null;
   setWeatherMood("default");
   forecastState = message ? "error" : "idle";
+  selectedForecastDate = "";
   latestForecast = null;
   renderForecast(null);
   els.weatherResultContainer?.classList.remove("is-fresh");
@@ -774,6 +1103,29 @@ function updateDetails(values) {
   els.sunriseValue.textContent = values.sunrise ?? "--";
   els.sunsetValue.textContent = values.sunset ?? "--";
   els.sourceValue.textContent = values.source ?? "--";
+}
+
+function refreshWeatherLanguage() {
+  if (!latestWeatherData) {
+    return;
+  }
+  const requestId = weatherDescriptionRequestCounter + 1;
+  weatherDescriptionRequestCounter = requestId;
+  const pack = currentPack();
+  const language = els.languageSelect.value;
+  const localizedDescription = localizeDescription(latestWeatherData.description, latestWeatherData.condition, language);
+  els.descriptionText.textContent = localizedDescription || pack.weatherUnavailable;
+  if (language !== "English" && localizedDescription && isLikelyEnglish(localizedDescription)) {
+    void translateText(localizedDescription, language).then((translated) => {
+      if (requestId !== weatherDescriptionRequestCounter) {
+        return;
+      }
+      if (translated) {
+        els.descriptionText.textContent = translated;
+      }
+    });
+  }
+  setStatusText(pack.statusLoaded.replace("{source}", latestWeatherData.source || "--"), "success");
 }
 
 function mapWmoToCondition(code) {
@@ -810,6 +1162,41 @@ function formatTrendText(items) {
   return `${text.trendPrefix}: ${tempTrend}, ${rainTrend}`;
 }
 
+function renderSelectedForecastDetails(item, unitSymbol, language) {
+  if (
+    !els.forecastSelectedDate ||
+    !els.forecastSelectedConditionValue ||
+    !els.forecastSelectedTempValue ||
+    !els.forecastSelectedRainValue ||
+    !els.forecastSelectedRainAmountValue
+  ) {
+    return;
+  }
+
+  if (!item) {
+    els.forecastSelectedDate.textContent = "--";
+    els.forecastSelectedConditionValue.textContent = "--";
+    els.forecastSelectedTempValue.textContent = "--";
+    els.forecastSelectedRainValue.textContent = "--";
+    els.forecastSelectedRainAmountValue.textContent = "--";
+    return;
+  }
+
+  const locale = currentLocale();
+  const dt = new Date(item.date);
+  const dateLabel = Number.isNaN(dt.getTime())
+    ? item.date
+    : dt.toLocaleDateString(locale, { weekday: "long", day: "2-digit", month: "long" });
+  const conditionLabel = toDisplayCondition(item.condition, language);
+  const symbol = WEATHER_SYMBOLS[item.condition] || "\uD83C\uDF24";
+
+  els.forecastSelectedDate.textContent = dateLabel;
+  els.forecastSelectedConditionValue.textContent = `${symbol} ${conditionLabel}`;
+  els.forecastSelectedTempValue.textContent = `${Math.round(item.max)}${unitSymbol} / ${Math.round(item.min)}${unitSymbol}`;
+  els.forecastSelectedRainValue.textContent = `${Math.round(item.rainChance)}%`;
+  els.forecastSelectedRainAmountValue.textContent = `${Number(item.rainAmount ?? 0).toFixed(1)} mm`;
+}
+
 function renderForecast(forecastData) {
   if (!els.forecastList || !els.forecastTrend) {
     return;
@@ -828,7 +1215,12 @@ function renderForecast(forecastData) {
           : text.idle || text.unavailable;
     els.forecastList.innerHTML = `<p class="forecast-rain">${fallbackMessage}</p>`;
     els.forecastTrend.textContent = `${text.trendPrefix}: --`;
+    renderSelectedForecastDetails(null, unitSymbol, language);
     return;
+  }
+
+  if (!selectedForecastDate || !forecastData.items.some((item) => item.date === selectedForecastDate)) {
+    selectedForecastDate = forecastData.items[0].date;
   }
 
   const locale = currentLocale();
@@ -840,18 +1232,36 @@ function renderForecast(forecastData) {
         : dt.toLocaleDateString(locale, { weekday: "short", day: "2-digit", month: "short" });
       const conditionLabel = toDisplayCondition(item.condition, language);
       const symbol = WEATHER_SYMBOLS[item.condition] || "\uD83C\uDF24";
+      const isSelected = item.date === selectedForecastDate;
       return `
-        <article class="forecast-card">
+        <button type="button" class="forecast-card ${isSelected ? "is-selected" : ""}" data-forecast-date="${item.date}" aria-pressed="${isSelected}">
           <p class="forecast-day">${dayLabel}</p>
           <p class="forecast-condition">${symbol} ${conditionLabel}</p>
           <p class="forecast-temp">${Math.round(item.max)}${unitSymbol} / ${Math.round(item.min)}${unitSymbol}</p>
           <p class="forecast-rain">${text.rainChance}: ${Math.round(item.rainChance)}%</p>
-        </article>
+        </button>
       `;
     })
     .join("");
 
   els.forecastList.innerHTML = cards;
+  const buttons = els.forecastList.querySelectorAll("[data-forecast-date]");
+  buttons.forEach((button) => {
+    button.addEventListener("click", () => {
+      const nextDate = button.getAttribute("data-forecast-date") || "";
+      if (!nextDate || nextDate === selectedForecastDate) {
+        return;
+      }
+      selectedForecastDate = nextDate;
+      renderForecast(latestForecast);
+    });
+  });
+
+  const selectedItem = forecastData.items.find((item) => item.date === selectedForecastDate) || forecastData.items[0];
+  if (selectedItem) {
+    selectedForecastDate = selectedItem.date;
+  }
+  renderSelectedForecastDetails(selectedItem, unitSymbol, language);
   els.forecastTrend.textContent = formatTrendText(forecastData.items);
 }
 
@@ -861,6 +1271,7 @@ function normalizeForecast(payload) {
   const max = daily.temperature_2m_max || [];
   const min = daily.temperature_2m_min || [];
   const rain = daily.precipitation_probability_max || [];
+  const rainAmount = daily.precipitation_sum || [];
   const codes = daily.weather_code || [];
 
   const items = [];
@@ -871,6 +1282,7 @@ function normalizeForecast(payload) {
       max: Number(max[idx]),
       min: Number(min[idx]),
       rainChance: Number(rain[idx] ?? 0),
+      rainAmount: Number(rainAmount[idx] ?? 0),
       condition: mapWmoToCondition(codes[idx]),
     });
   }
@@ -882,7 +1294,7 @@ async function fetchForecast(latitude, longitude, units) {
   const params = new URLSearchParams({
     latitude: String(latitude),
     longitude: String(longitude),
-    daily: "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max",
+    daily: "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum",
     forecast_days: String(FORECAST_DAYS),
     temperature_unit: temperatureUnit,
     timezone: "auto",
@@ -900,6 +1312,7 @@ async function fetchForecast(latitude, longitude, units) {
 async function fetchAndRenderForecast(latitude, longitude) {
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
     forecastState = "error";
+    selectedForecastDate = "";
     latestForecast = null;
     renderForecast(null);
     return;
@@ -923,6 +1336,7 @@ async function fetchAndRenderForecast(latitude, longitude) {
       return;
     }
     forecastState = "error";
+    selectedForecastDate = "";
     latestForecast = null;
     renderForecast(null);
   }
@@ -949,12 +1363,29 @@ function localizeDescription(description, condition, language) {
 }
 
 function renderWeather(data) {
+  latestWeatherData = data;
+  const renderRequestId = weatherDescriptionRequestCounter + 1;
+  weatherDescriptionRequestCounter = renderRequestId;
   const pack = currentPack();
   const selectedLanguage = els.languageSelect.value;
   const localizedDescription = localizeDescription(data.description, data.condition, selectedLanguage);
   els.conditionSymbol.textContent = data.symbol || "\uD83C\uDF24";
   els.temperatureText.textContent = `${data.temperature ?? "--"} ${data.temperatureUnit ?? ""}`.trim();
   els.descriptionText.textContent = localizedDescription || pack.weatherUnavailable;
+  if (
+    selectedLanguage !== "English" &&
+    localizedDescription &&
+    isLikelyEnglish(localizedDescription)
+  ) {
+    void translateText(localizedDescription, selectedLanguage).then((translated) => {
+      if (renderRequestId !== weatherDescriptionRequestCounter) {
+        return;
+      }
+      if (translated) {
+        els.descriptionText.textContent = translated;
+      }
+    });
+  }
   els.locationText.textContent = data.location || "--";
   updateDetails({
     feelsLike: `${data.feelsLike ?? "--"} ${data.temperatureUnit ?? ""}`.trim(),
@@ -1056,7 +1487,7 @@ async function fetchFromOpenWeather(query, language, units, customKey) {
     return { error: pack.allKeysFailed };
   }
 
-  const languageCode = LANGUAGE_CODES[language] || "en";
+  const languageCode = OPENWEATHER_LANGUAGE_FALLBACK[language] || LANGUAGE_CODES[language] || "en";
   let lastKeyError = "";
 
   for (const entry of keys) {
@@ -1103,6 +1534,7 @@ async function fetchWeather() {
 
   setLoading(true);
   try {
+    await ensureLanguageResources(els.languageSelect.value);
     const result = await fetchFromOpenWeather(
       { q: city },
       els.languageSelect.value,
@@ -1123,13 +1555,15 @@ async function fetchWeather() {
 }
 
 async function autoFetchWeatherForCurrentLocation() {
+  setLoading(true);
+  await ensureLanguageResources(els.languageSelect.value);
   const pack = currentPack();
   if (!navigator.geolocation) {
     setStatusText(pack.locationUnsupported, "error");
+    setLoading(false);
     return;
   }
 
-  setLoading(true);
   setStatusText(pack.statusLocating, "neutral");
 
   try {
@@ -1170,10 +1604,12 @@ async function autoFetchWeatherForCurrentLocation() {
 }
 
 function initialize() {
-  applyLanguageUI();
+  void applyLanguageUI();
   setWeatherMood("default");
   els.fetchBtn.addEventListener("click", fetchWeather);
-  els.languageSelect.addEventListener("change", applyLanguageUI);
+  els.languageSelect.addEventListener("change", () => {
+    void applyLanguageUI();
+  });
   els.cityInput.addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
       fetchWeather();
