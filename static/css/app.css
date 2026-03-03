@@ -362,6 +362,15 @@ h1 {
 .control-grid {
   display: grid;
   gap: 12px;
+  min-width: 0;
+}
+
+.city-row,
+.field-block,
+.control-foot,
+.quick-row,
+.favorite-row {
+  min-width: 0;
 }
 
 .city-row label,
@@ -379,6 +388,7 @@ h1 {
   display: grid;
   gap: 10px;
   grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
 }
 
 .settings-grid {
@@ -519,6 +529,8 @@ select:focus {
   color: #b9d8f7;
   font-size: 13px;
   font-weight: 700;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .status-text.status-success {
@@ -540,6 +552,7 @@ select:focus {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  min-width: 0;
 }
 
 .chip {
@@ -552,6 +565,7 @@ select:focus {
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
+  white-space: nowrap;
   transition: transform 0.16s ease, border-color 0.2s ease, background 0.2s ease;
 }
 
@@ -570,6 +584,7 @@ select:focus {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
 }
 
@@ -602,6 +617,7 @@ select:focus {
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
+  white-space: nowrap;
 }
 
 .saved-city-btn {
@@ -630,6 +646,7 @@ select:focus {
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.32px;
+  white-space: nowrap;
   cursor: pointer;
   transition: border-color 0.2s ease, background 0.2s ease, transform 0.15s ease;
 }
@@ -1247,6 +1264,33 @@ body.is-loading .planner-panel {
 
   .primary-btn {
     width: 100%;
+    min-width: 0;
+  }
+
+  .quick-row .chips {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-bottom: 4px;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x proximity;
+    scrollbar-width: thin;
+    scrollbar-color: #5c8fbe transparent;
+  }
+
+  .quick-row .chip {
+    scroll-snap-align: start;
+  }
+
+  .chips-saved {
+    flex-wrap: wrap;
+    overflow: visible;
+    padding-bottom: 0;
+  }
+
+  .favorite-head .ghost-btn {
+    width: 100%;
+    min-height: 40px;
   }
 
   .hero-top {
@@ -1257,19 +1301,11 @@ body.is-loading .planner-panel {
     margin-left: auto;
   }
 
-  .chips {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    padding-bottom: 4px;
-    scrollbar-width: thin;
-    scrollbar-color: #5c8fbe transparent;
-  }
-
-  .chips::-webkit-scrollbar {
+  .quick-row .chips::-webkit-scrollbar {
     height: 6px;
   }
 
-  .chips::-webkit-scrollbar-thumb {
+  .quick-row .chips::-webkit-scrollbar-thumb {
     background: #5c8fbe;
     border-radius: 999px;
   }
@@ -1332,6 +1368,33 @@ body.is-loading .planner-panel {
 }
 
 @media (max-width: 620px) {
+  .control-panel {
+    gap: 12px;
+  }
+
+  .control-grid,
+  .settings-grid {
+    gap: 10px;
+  }
+
+  .favorite-head {
+    align-items: stretch;
+  }
+
+  input,
+  select,
+  .primary-btn {
+    font-size: 16px;
+  }
+
+  .status-row {
+    padding: 9px 10px;
+  }
+
+  .status-text {
+    font-size: 12px;
+  }
+
   .hero {
     padding: 14px;
   }
@@ -1363,6 +1426,36 @@ body.is-loading .planner-panel {
 
   .field-wide {
     grid-column: auto;
+  }
+}
+
+@media (max-width: 420px) {
+  .control-panel {
+    padding: 12px;
+  }
+
+  .search-box,
+  .settings-grid,
+  .control-foot {
+    gap: 8px;
+  }
+
+  .city-row label,
+  .field-block label {
+    margin-bottom: 6px;
+  }
+
+  .chip {
+    padding: 7px 11px;
+    font-size: 11px;
+  }
+
+  .saved-city-btn {
+    padding: 7px 9px 7px 11px;
+  }
+
+  .saved-city-remove {
+    padding: 7px 8px;
   }
 }
 
