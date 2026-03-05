@@ -4,6 +4,7 @@ Regional Weather Studio is a Flask + JavaScript weather intelligence app with:
 - live weather and 15-day forecast
 - analytics charts
 - machine-learning next-day weather prediction
+- sky image weather detection (cloud classification from uploaded photos)
 - alert evaluation + optional email
 - travel and agriculture decision tools
 - rule-based weather chatbot
@@ -29,6 +30,7 @@ You can see current mode in the status text in the UI.
 
 - Backend: Python, Flask, Flask-Login, SQLite, requests
 - ML: pandas, numpy, scikit-learn, joblib
+- Vision ML: OpenCV, TensorFlow/Keras
 - Frontend: vanilla HTML/CSS/JS, Chart.js
 - Weather providers:
   - OpenWeather (current conditions, map tiles)
@@ -48,6 +50,7 @@ backend/
     intelligence_routes.py
     auth_routes.py
     ml_routes.py
+    vision_routes.py
   services/
     weather_service.py
     analytics_service.py
@@ -60,7 +63,9 @@ backend/
     climate_service.py
     email_service.py
     ml_prediction_service.py
+    sky_image_service.py
   train_weather_model.py
+  train_sky_model.py
   models/
     db.py
     user.py
@@ -134,6 +139,7 @@ Weather and config:
 - `GET /api/dashboard`
 - `GET /api/map/layers`
 - `POST /api/ml/predict`
+- `POST /api/vision/sky-analysis`
 
 Intelligence and planners:
 - `POST /api/platform-bundle`
@@ -170,6 +176,7 @@ SQLite tables created automatically on startup:
 ML model artifacts (created after training):
 - `models/weather_temperature_model.pkl`
 - `models/weather_rain_model.pkl`
+- `backend/models/sky_classifier.h5`
 
 ## Frontend Behavior Notes
 
@@ -206,6 +213,10 @@ ML model artifacts (created after training):
   - Train models first:
     `python -m backend.train_weather_model --lat 22.57 --lon 88.36 --days 540`
 
+- Sky image API returns "model unavailable"
+  - Train the sky CNN model first:
+    `python -m backend.train_sky_model --dataset-dir <path-to-sky-dataset> --epochs 12`
+
 ## Dependencies
 
 From `requirements.txt`:
@@ -216,3 +227,5 @@ From `requirements.txt`:
 - `numpy>=1.26.0`
 - `scikit-learn>=1.5.0`
 - `joblib>=1.4.0`
+- `opencv-python-headless>=4.10.0`
+- `tensorflow>=2.16.0`

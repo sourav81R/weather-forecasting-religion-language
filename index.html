@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/app.css?v=20260306-8">
+  <link rel="stylesheet" href="/static/css/app.css?v=20260306-9">
 </head>
 <body>
   <div class="app-shell" id="appShell">
@@ -108,6 +108,13 @@
             <h2>Activity Recommendations</h2>
             <div id="activityList" class="list"></div>
           </article>
+
+          <article class="panel card">
+            <h2>AI Weather Prediction</h2>
+            <div id="mlPredictionList" class="list">
+              <div class="list-item">Load weather to generate ML prediction.</div>
+            </div>
+          </article>
         </div>
       </section>
 
@@ -176,6 +183,18 @@
             </div>
             <div id="agriResult" class="list"></div>
           </article>
+
+          <article class="panel card">
+            <h2>Sky Photo Weather Detection</h2>
+            <div class="form-grid">
+              <input id="skyImageInput" type="file" accept="image/*">
+              <button id="skyAnalyzeBtn" class="primary-btn" type="button">Analyze Sky</button>
+            </div>
+            <img id="skyImagePreview" class="sky-preview" alt="Sky preview">
+            <div id="skyAnalysisResult" class="list sky-analysis-list">
+              <div class="list-item">Upload a sky photo to estimate cloud and rain risk.</div>
+            </div>
+          </article>
         </div>
       </section>
 
@@ -242,7 +261,7 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <script src="/static/js/app.js?v=20260306-8"></script>
+  <script src="/static/js/app.js?v=20260306-9"></script>
 </body>
 </html>
 

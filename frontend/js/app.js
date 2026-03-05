@@ -112,6 +112,10 @@ const el = {
   cropType: document.getElementById("cropType"),
   agriBtn: document.getElementById("agriBtn"),
   agriResult: document.getElementById("agriResult"),
+  skyImageInput: document.getElementById("skyImageInput"),
+  skyAnalyzeBtn: document.getElementById("skyAnalyzeBtn"),
+  skyImagePreview: document.getElementById("skyImagePreview"),
+  skyAnalysisResult: document.getElementById("skyAnalysisResult"),
   ruleRain: document.getElementById("ruleRain"),
   ruleTemp: document.getElementById("ruleTemp"),
   ruleWind: document.getElementById("ruleWind"),
@@ -148,6 +152,7 @@ const state = {
   analytics: null,
   activity: null,
   mlPrediction: null,
+  skyAnalysis: null,
   alerts: [],
   coords: null,
   charts: {},
@@ -1309,6 +1314,93 @@ async function handleAgricultureAdvisor() {
   }
 }
 
+function previewSkyImage() {
+  if (!el.skyImageInput || !el.skyImagePreview) return;
+  const file = el.skyImageInput.files?.[0];
+  if (!file) {
+    el.skyImagePreview.style.display = "none";
+    el.skyImagePreview.removeAttribute("src");
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = () => {
+    el.skyImagePreview.src = String(reader.result || "");
+    el.skyImagePreview.style.display = "block";
+  };
+  reader.readAsDataURL(file);
+}
+
+function renderSkyAnalysis(result) {
+  if (!el.skyAnalysisResult) return;
+  if (!result) {
+    el.skyAnalysisResult.innerHTML = `<div class="list-item">Sky analysis unavailable.</div>`;
+    return;
+  }
+
+  const rain = Number.isFinite(Number(result.rain_probability)) ? `${Math.round(Number(result.rain_probability) * 100)}%` : "--";
+  const storm = Number.isFinite(Number(result.storm_risk)) ? `${Math.round(Number(result.storm_risk) * 100)}%` : "--";
+  const cloudDensity = Number.isFinite(Number(result.cloud_density)) ? `${Math.round(Number(result.cloud_density) * 100)}%` : "--";
+  const confidence = Number.isFinite(Number(result.confidence)) ? `${Math.round(Number(result.confidence) * 100)}%` : "--";
+  const forecastRain =
+    Number.isFinite(Number(result.forecast_rain_probability))
+      ? `${Math.round(Number(result.forecast_rain_probability) * 100)}%`
+      : null;
+
+  const extra = forecastRain
+    ? `<div class="list-item"><strong>Forecast Rain (Blend Input)</strong><div>${forecastRain}</div></div>`
+    : "";
+
+  el.skyAnalysisResult.innerHTML = [
+    `<div class="list-item"><strong>Sky Condition</strong><div>${escapeHtml(capitalize(String(result.sky_condition || "--").replaceAll("_", " ")))}</div></div>`,
+    `<div class="list-item"><strong>Rain Probability</strong><div>${rain}</div></div>`,
+    `<div class="list-item"><strong>Storm Risk</strong><div>${storm}</div></div>`,
+    `<div class="list-item"><strong>Cloud Density</strong><div>${cloudDensity}</div></div>`,
+    `<div class="list-item"><strong>Confidence</strong><div>${confidence}</div></div>`,
+    extra,
+  ]
+    .filter(Boolean)
+    .join("");
+}
+
+async function analyzeSkyImage() {
+  if (!el.skyImageInput) return;
+  const file = el.skyImageInput.files?.[0];
+  if (!file) {
+    setStatus("Select a sky image first.", "error");
+    return;
+  }
+  if (state.staticMode) {
+    setStatus("Sky image detection requires backend mode (run Flask app).", "error");
+    return;
+  }
+
+  const body = new FormData();
+  body.append("image", file, file.name || "sky.jpg");
+  if (state.coords?.latitude != null && state.coords?.longitude != null) {
+    body.append("lat", String(state.coords.latitude));
+    body.append("lon", String(state.coords.longitude));
+  }
+
+  setStatus("Analyzing sky image...");
+  try {
+    const response = await fetch("/api/vision/sky-analysis", {
+      method: "POST",
+      credentials: "same-origin",
+      body,
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || `Sky analysis failed (${response.status})`);
+
+    state.skyAnalysis = payload;
+    renderSkyAnalysis(payload);
+    setStatus("Sky image analysis complete.", "success");
+  } catch (error) {
+    renderSkyAnalysis(null);
+    setStatus(error.message, "error");
+  }
+}
+
 function appendChat(text, role) {
   const bubble = document.createElement("div");
   bubble.className = `chat-bubble ${role === "user" ? "chat-user" : "chat-bot"}`;
@@ -1901,6 +1993,12 @@ function wireEvents() {
   el.locateBtn.addEventListener("click", () => void useCurrentLocation());
   el.travelBtn.addEventListener("click", () => void handleTravelPlanner());
   el.agriBtn.addEventListener("click", () => void handleAgricultureAdvisor());
+  if (el.skyImageInput) {
+    el.skyImageInput.addEventListener("change", previewSkyImage);
+  }
+  if (el.skyAnalyzeBtn) {
+    el.skyAnalyzeBtn.addEventListener("click", () => void analyzeSkyImage());
+  }
   el.evaluateAlertsBtn.addEventListener("click", () => void evaluateAlerts());
   el.chatSendBtn.addEventListener("click", () => void askChatbot());
   el.chatInput.addEventListener("keydown", (event) => {

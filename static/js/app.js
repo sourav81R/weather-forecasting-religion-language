@@ -99,6 +99,7 @@ const el = {
   metricGrid: document.getElementById("metricGrid"),
   aiSummary: document.getElementById("aiSummary"),
   activityList: document.getElementById("activityList"),
+  mlPredictionList: document.getElementById("mlPredictionList"),
   forecastCards: document.getElementById("forecastCards"),
   outdoorWindow: document.getElementById("outdoorWindow"),
   climateNarrative: document.getElementById("climateNarrative"),
@@ -111,6 +112,10 @@ const el = {
   cropType: document.getElementById("cropType"),
   agriBtn: document.getElementById("agriBtn"),
   agriResult: document.getElementById("agriResult"),
+  skyImageInput: document.getElementById("skyImageInput"),
+  skyAnalyzeBtn: document.getElementById("skyAnalyzeBtn"),
+  skyImagePreview: document.getElementById("skyImagePreview"),
+  skyAnalysisResult: document.getElementById("skyAnalysisResult"),
   ruleRain: document.getElementById("ruleRain"),
   ruleTemp: document.getElementById("ruleTemp"),
   ruleWind: document.getElementById("ruleWind"),
@@ -146,6 +151,8 @@ const state = {
   forecast: null,
   analytics: null,
   activity: null,
+  mlPrediction: null,
+  skyAnalysis: null,
   alerts: [],
   coords: null,
   charts: {},
@@ -471,6 +478,31 @@ function staticBuildSummary(current, forecast) {
   return `Today is expected to be ${tempWord} and ${humidityWord}. Rain chance is around ${Math.round(rain)}% with winds near ${Math.round(wind)} km/h. ${advice}`;
 }
 
+function staticBuildMlPrediction(current, forecast) {
+  const daily = forecast.daily || [];
+  const tomorrow = daily[1] || daily[0] || {};
+  const tMin = Number(tomorrow.minTemp || current.tempC || current.temperature || 0);
+  const tMax = Number(tomorrow.maxTemp || current.tempC || current.temperature || 0);
+  const rainProbability = Number(tomorrow.rainProbability || 0) / 100;
+
+  const hourly = forecast.hourly || [];
+  const firstWindow = hourly.slice(0, 24).map((h) => Number(h.humidity || 0));
+  const secondWindow = hourly.slice(24, 48).map((h) => Number(h.humidity || 0));
+  let humidityTrend = "stable";
+  if (firstWindow.length && secondWindow.length) {
+    const firstAvg = firstWindow.reduce((sum, value) => sum + value, 0) / firstWindow.length;
+    const secondAvg = secondWindow.reduce((sum, value) => sum + value, 0) / secondWindow.length;
+    humidityTrend = secondAvg > firstAvg ? "increasing" : secondAvg < firstAvg ? "decreasing" : "stable";
+  }
+
+  return {
+    temperature: Number(((tMin + tMax) / 2).toFixed(1)),
+    rainProbability: Number(Math.max(0, Math.min(1, rainProbability)).toFixed(2)),
+    confidence: 0.55,
+    humidityTrend,
+  };
+}
+
 async function staticBuildBundle(payload) {
   let location = { ...payload };
   if (!location.city && (!Number.isFinite(Number(location.latitude)) || !Number.isFinite(Number(location.longitude)))) {
@@ -491,6 +523,7 @@ async function staticBuildBundle(payload) {
     activity,
     alerts: staticBuildAlerts(current, forecast, []),
     aiSummary: staticBuildSummary(current, forecast),
+    mlPrediction: staticBuildMlPrediction(current, forecast),
   };
 }
 
@@ -798,6 +831,7 @@ function applyBundle(bundle) {
   state.forecast = bundle.forecast;
   state.analytics = bundle.analytics;
   state.activity = bundle.activity;
+  state.mlPrediction = bundle.mlPrediction || bundle.ml_prediction || null;
   state.alerts = bundle.alerts || [];
   state.coords = { latitude: Number(bundle.current.latitude), longitude: Number(bundle.current.longitude) };
   localStorage.setItem(LAST_COORDS_KEY, JSON.stringify(state.coords));
@@ -806,6 +840,7 @@ function applyBundle(bundle) {
   renderForecast();
   renderAnalytics();
   renderActivity();
+  renderMlPrediction();
   renderAlerts(state.alerts);
   renderAiSummary(bundle.aiSummary);
   addFavorite((state.current.location || "").split(",")[0]);
@@ -881,6 +916,36 @@ function renderActivity() {
     .map((item) => `<div class="list-item"><strong>${capitalize(item.activity)}</strong> <span class="muted">${item.score}/100</span><div>${item.recommendation}</div></div>`)
     .join("");
 }
+
+function renderMlPrediction() {
+  if (!el.mlPredictionList) return;
+  const prediction = state.mlPrediction;
+  if (!prediction) {
+    el.mlPredictionList.innerHTML = `<div class="list-item">ML prediction unavailable.</div>`;
+    return;
+  }
+
+  let temp = "--";
+  if (Number.isFinite(Number(prediction.temperature))) {
+    const tempC = Number(prediction.temperature);
+    if (el.unitsSelect?.value === "imperial") {
+      temp = `${((tempC * 9) / 5 + 32).toFixed(1)}\u00B0F`;
+    } else {
+      temp = `${tempC.toFixed(1)}\u00B0C`;
+    }
+  }
+  const rain = Number.isFinite(Number(prediction.rainProbability)) ? `${Math.round(Number(prediction.rainProbability) * 100)}%` : "--";
+  const confidence = Number.isFinite(Number(prediction.confidence)) ? `${Math.round(Number(prediction.confidence) * 100)}%` : "--";
+  const humidityTrend = prediction.humidityTrend || "--";
+
+  el.mlPredictionList.innerHTML = [
+    `<div class="list-item"><strong>Temperature Tomorrow</strong><div>${temp}</div></div>`,
+    `<div class="list-item"><strong>Rain Probability</strong><div>${rain}</div></div>`,
+    `<div class="list-item"><strong>Confidence</strong><div>${confidence}</div></div>`,
+    `<div class="list-item"><strong>Humidity Trend</strong><div>${capitalize(String(humidityTrend))}</div></div>`,
+  ].join("");
+}
+
 function renderForecast() {
   const daily = state.forecast?.daily || [];
   if (!daily.length) {
@@ -1246,6 +1311,93 @@ async function handleAgricultureAdvisor() {
       ${advice}`;
   } catch (error) {
     el.agriResult.innerHTML = `<div class="list-item">${error.message}</div>`;
+  }
+}
+
+function previewSkyImage() {
+  if (!el.skyImageInput || !el.skyImagePreview) return;
+  const file = el.skyImageInput.files?.[0];
+  if (!file) {
+    el.skyImagePreview.style.display = "none";
+    el.skyImagePreview.removeAttribute("src");
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = () => {
+    el.skyImagePreview.src = String(reader.result || "");
+    el.skyImagePreview.style.display = "block";
+  };
+  reader.readAsDataURL(file);
+}
+
+function renderSkyAnalysis(result) {
+  if (!el.skyAnalysisResult) return;
+  if (!result) {
+    el.skyAnalysisResult.innerHTML = `<div class="list-item">Sky analysis unavailable.</div>`;
+    return;
+  }
+
+  const rain = Number.isFinite(Number(result.rain_probability)) ? `${Math.round(Number(result.rain_probability) * 100)}%` : "--";
+  const storm = Number.isFinite(Number(result.storm_risk)) ? `${Math.round(Number(result.storm_risk) * 100)}%` : "--";
+  const cloudDensity = Number.isFinite(Number(result.cloud_density)) ? `${Math.round(Number(result.cloud_density) * 100)}%` : "--";
+  const confidence = Number.isFinite(Number(result.confidence)) ? `${Math.round(Number(result.confidence) * 100)}%` : "--";
+  const forecastRain =
+    Number.isFinite(Number(result.forecast_rain_probability))
+      ? `${Math.round(Number(result.forecast_rain_probability) * 100)}%`
+      : null;
+
+  const extra = forecastRain
+    ? `<div class="list-item"><strong>Forecast Rain (Blend Input)</strong><div>${forecastRain}</div></div>`
+    : "";
+
+  el.skyAnalysisResult.innerHTML = [
+    `<div class="list-item"><strong>Sky Condition</strong><div>${escapeHtml(capitalize(String(result.sky_condition || "--").replaceAll("_", " ")))}</div></div>`,
+    `<div class="list-item"><strong>Rain Probability</strong><div>${rain}</div></div>`,
+    `<div class="list-item"><strong>Storm Risk</strong><div>${storm}</div></div>`,
+    `<div class="list-item"><strong>Cloud Density</strong><div>${cloudDensity}</div></div>`,
+    `<div class="list-item"><strong>Confidence</strong><div>${confidence}</div></div>`,
+    extra,
+  ]
+    .filter(Boolean)
+    .join("");
+}
+
+async function analyzeSkyImage() {
+  if (!el.skyImageInput) return;
+  const file = el.skyImageInput.files?.[0];
+  if (!file) {
+    setStatus("Select a sky image first.", "error");
+    return;
+  }
+  if (state.staticMode) {
+    setStatus("Sky image detection requires backend mode (run Flask app).", "error");
+    return;
+  }
+
+  const body = new FormData();
+  body.append("image", file, file.name || "sky.jpg");
+  if (state.coords?.latitude != null && state.coords?.longitude != null) {
+    body.append("lat", String(state.coords.latitude));
+    body.append("lon", String(state.coords.longitude));
+  }
+
+  setStatus("Analyzing sky image...");
+  try {
+    const response = await fetch("/api/vision/sky-analysis", {
+      method: "POST",
+      credentials: "same-origin",
+      body,
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || `Sky analysis failed (${response.status})`);
+
+    state.skyAnalysis = payload;
+    renderSkyAnalysis(payload);
+    setStatus("Sky image analysis complete.", "success");
+  } catch (error) {
+    renderSkyAnalysis(null);
+    setStatus(error.message, "error");
   }
 }
 
@@ -1841,6 +1993,12 @@ function wireEvents() {
   el.locateBtn.addEventListener("click", () => void useCurrentLocation());
   el.travelBtn.addEventListener("click", () => void handleTravelPlanner());
   el.agriBtn.addEventListener("click", () => void handleAgricultureAdvisor());
+  if (el.skyImageInput) {
+    el.skyImageInput.addEventListener("change", previewSkyImage);
+  }
+  if (el.skyAnalyzeBtn) {
+    el.skyAnalyzeBtn.addEventListener("click", () => void analyzeSkyImage());
+  }
   el.evaluateAlertsBtn.addEventListener("click", () => void evaluateAlerts());
   el.chatSendBtn.addEventListener("click", () => void askChatbot());
   el.chatInput.addEventListener("keydown", (event) => {
