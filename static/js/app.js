@@ -1,5 +1,5 @@
 const CACHE_KEY = "weather-studio-cache-v2";
-const PWA_CACHE_NAME = "weather-studio-pwa-v12";
+const PWA_CACHE_NAME = "weather-studio-pwa-v13";
 const FAVORITES_KEY = "weather-studio-favorites-v2";
 const LAST_COORDS_KEY = "weather-studio-last-coords-v2";
 const LUNAR_CYCLE_DAYS = 29.53058867;
@@ -1150,32 +1150,114 @@ function appendChat(text, role) {
   el.chatLog.scrollTop = el.chatLog.scrollHeight;
 }
 
+function chatHas(text, words) {
+  return words.some((word) => text.includes(word));
+}
+
+function chatNum(value, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function chatResolveDay(text, daily) {
+  if (!daily.length) return null;
+  if (text.includes("today")) return daily[0];
+  if (text.includes("tomorrow")) return daily[1] || null;
+  const match = text.match(/\bin\s+(\d{1,2})\s+day/);
+  if (match) {
+    const idx = Number(match[1]);
+    if (Number.isFinite(idx) && idx >= 0 && idx < daily.length) return daily[idx];
+  }
+  return null;
+}
+
+function chatFormatDayLabel(day) {
+  const raw = String(day?.date || "").trim();
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return raw || "selected day";
+  return parsed.toLocaleDateString(undefined, { weekday: "short", day: "2-digit", month: "short" });
+}
+
+function answerStaticWeatherQuestion(question) {
+  const current = state.current || {};
+  const daily = state.forecast?.daily || [];
+  const hourly = state.forecast?.hourly || [];
+  const text = String(question || "").toLowerCase().trim();
+
+  if (!daily.length) return "Load weather first, then ask about rain, temperature, humidity, wind, UV, sunrise/sunset, or weekend forecast.";
+
+  const selectedDay = chatResolveDay(text, daily);
+  const selectedLabel = selectedDay ? chatFormatDayLabel(selectedDay) : "today";
+
+  if (chatHas(text, ["sunrise", "sunset", "daylight"])) {
+    return `Sunrise is around ${current.sunrise || "--"} and sunset is around ${current.sunset || "--"}.`;
+  }
+  if (chatHas(text, ["humidity", "humid"])) {
+    return `Current humidity is around ${Math.round(chatNum(current.humidity))}%.`;
+  }
+  if (chatHas(text, ["wind", "breeze", "gust"])) {
+    return `Current wind is about ${chatNum(current.windSpeed).toFixed(1)} ${current.windUnit || "m/s"}.`;
+  }
+  if (chatHas(text, ["uv", "sunburn", "sunscreen"])) {
+    const uv = chatNum((selectedDay || daily[0]).uvIndex);
+    const level = uv >= 8 ? "very high" : uv >= 6 ? "high" : uv >= 3 ? "moderate" : "low";
+    return `${selectedLabel} UV index is around ${uv.toFixed(1)} (${level}).`;
+  }
+  if (chatHas(text, ["rain", "umbrella", "precip", "drizzle", "shower"])) {
+    const day = selectedDay || daily[0];
+    const rain = chatNum(day.rainProbability);
+    const amount = chatNum(day.rainAmount);
+    return `${selectedLabel} rain chance is ${Math.round(rain)}% with about ${amount.toFixed(1)} ${(state.forecast?.units?.precipitation || "mm")}. ${rain >= 45 ? "Carry an umbrella." : "Umbrella is usually optional."}`;
+  }
+  if (chatHas(text, ["temperature", "temp", "hot", "cold", "heat", "feels like"])) {
+    if (selectedDay) {
+      return `${selectedLabel} temperature is expected around ${Math.round(chatNum(selectedDay.minTemp))} to ${Math.round(chatNum(selectedDay.maxTemp))}${state.current?.temperatureUnit || "°C"}.`;
+    }
+    return `Current temperature is ${Math.round(chatNum(current.temperature))}${current.temperatureUnit || "°C"} and feels like ${Math.round(chatNum(current.feelsLike))}${current.temperatureUnit || "°C"}.`;
+  }
+  if (chatHas(text, ["hottest", "warmest", "coldest", "coolest"])) {
+    if (text.includes("cold") || text.includes("cool")) {
+      const coldest = daily.reduce((best, item) => (chatNum(item.minTemp, 999) < chatNum(best.minTemp, 999) ? item : best), daily[0]);
+      return `Coldest forecast day is ${chatFormatDayLabel(coldest)} at about ${Math.round(chatNum(coldest.minTemp))}${state.current?.temperatureUnit || "°C"}.`;
+    }
+    const hottest = daily.reduce((best, item) => (chatNum(item.maxTemp, -999) > chatNum(best.maxTemp, -999) ? item : best), daily[0]);
+    return `Hottest forecast day is ${chatFormatDayLabel(hottest)} at about ${Math.round(chatNum(hottest.maxTemp))}${state.current?.temperatureUnit || "°C"}.`;
+  }
+  if (chatHas(text, ["weekend"])) {
+    const weekend = daily.filter((item) => {
+      const d = new Date(item.date);
+      return !Number.isNaN(d.getTime()) && (d.getDay() === 0 || d.getDay() === 6);
+    });
+    if (!weekend.length) return "Weekend forecast is outside the current 15-day range.";
+    const highs = weekend.map((item) => chatNum(item.maxTemp));
+    const lows = weekend.map((item) => chatNum(item.minTemp));
+    const rain = Math.max(...weekend.map((item) => chatNum(item.rainProbability)), 0);
+    return `Weekend temperatures are around ${Math.round(Math.min(...lows))}-${Math.round(Math.max(...highs))}${state.current?.temperatureUnit || "°C"} with peak rain chance near ${Math.round(rain)}%.`;
+  }
+  if (chatHas(text, ["outdoor", "activity", "best time", "walk", "run", "jog", "picnic"])) {
+    const windowText = computeOutdoorWindow();
+    const best = state.activity?.bestActivity;
+    if (best) return `${windowText} Recommended activity now: ${best.activity} (${best.score}/100).`;
+    return windowText;
+  }
+  if (chatHas(text, ["forecast", "next", "upcoming", "weather"])) {
+    const today = daily[0];
+    const tomorrow = daily[1];
+    const line1 = `Today: ${String(today.condition || "mixed").toLowerCase()}, rain chance ${Math.round(chatNum(today.rainProbability))}%.`;
+    if (!tomorrow) return line1;
+    const line2 = `Tomorrow: ${String(tomorrow.condition || "mixed").toLowerCase()}, ${Math.round(chatNum(tomorrow.minTemp))}-${Math.round(chatNum(tomorrow.maxTemp))}${state.current?.temperatureUnit || "°C"}.`;
+    return `${line1} ${line2}`;
+  }
+  return staticBuildSummary(current, state.forecast || { daily: [] });
+}
+
 async function askChatbot() {
   const question = el.chatInput.value.trim();
   if (!question) return;
   el.chatInput.value = "";
   appendChat(question, "user");
   if (state.staticMode) {
-    const daily = state.forecast?.daily || [];
-    const q = question.toLowerCase();
-    if (q.includes("rain") && q.includes("tomorrow") && daily[1]) {
-      appendChat(`Tomorrow rain probability is around ${Math.round(daily[1].rainProbability)}%.`, "bot");
-      return;
-    }
-    if ((q.includes("weekend") || q.includes("this weekend")) && daily.length) {
-      const weekend = daily.filter((d) => {
-        const date = new Date(d.date);
-        return date.getDay() === 0 || date.getDay() === 6;
-      });
-      if (weekend.length) {
-        const highs = weekend.map((d) => Number(d.maxTemp));
-        appendChat(`Weekend highs are expected between ${Math.min(...highs).toFixed(1)} and ${Math.max(...highs).toFixed(1)}.`, "bot");
-      } else {
-        appendChat("Weekend forecast is outside the current 15-day range.", "bot");
-      }
-      return;
-    }
-    appendChat(staticBuildSummary(state.current || {}, state.forecast || { daily: [] }), "bot");
+    appendChat(answerStaticWeatherQuestion(question), "bot");
     return;
   }
 
@@ -1709,3 +1791,4 @@ async function initialize() {
 }
 
 void initialize();
+

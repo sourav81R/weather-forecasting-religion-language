@@ -1,15 +1,15 @@
-const CACHE_NAME = "weather-studio-pwa-v12";
+const CACHE_NAME = "weather-studio-pwa-v13";
 const OFFLINE_ASSETS = [
   "/",
   "/frontend/index.html",
   "/css/app.css",
-  "/css/app.css?v=20260305-7",
+  "/css/app.css?v=20260305-8",
   "/js/app.js",
-  "/js/app.js?v=20260305-7",
+  "/js/app.js?v=20260305-8",
   "/static/css/app.css",
-  "/static/css/app.css?v=20260305-7",
+  "/static/css/app.css?v=20260305-8",
   "/static/js/app.js",
-  "/static/js/app.js?v=20260305-7",
+  "/static/js/app.js?v=20260305-8",
   "/manifest.json",
   "/components/icon-192.png",
   "/components/icon-512.png",
@@ -79,4 +79,5 @@ self.addEventListener("fetch", (event) => {
     })
   );
 });
+
 
