@@ -3,6 +3,7 @@ from __future__ import annotations
 from flask import Blueprint, jsonify, request
 
 from backend.services.analytics_service import build_analytics
+from backend.services.ml_prediction_service import ml_prediction_service
 from backend.services.weather_service import LANGUAGE_CODES, weather_service
 
 bp = Blueprint("weather_api", __name__, url_prefix="/api")
@@ -108,7 +109,14 @@ def dashboard():
 
         forecast_data = weather_service.fetch_forecast(latitude=latitude, longitude=longitude, units=units, days=15)
         analytics = build_analytics(forecast_data)
-        return jsonify({"current": current, "forecast": forecast_data, "analytics": analytics})
+        ml_raw = ml_prediction_service.predict_weather(city=city, lat=latitude, lon=longitude)
+        ml_prediction = {
+            "temperature": ml_raw.get("temperature_prediction"),
+            "rain_probability": ml_raw.get("rain_probability"),
+            "confidence": ml_raw.get("confidence_score"),
+            "humidity_trend": ml_raw.get("humidity_trend"),
+        }
+        return jsonify({"current": current, "forecast": forecast_data, "analytics": analytics, "ml_prediction": ml_prediction})
     except (TypeError, ValueError) as exc:
         return jsonify({"error": str(exc)}), 400
 

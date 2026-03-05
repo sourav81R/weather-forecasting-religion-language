@@ -10,6 +10,8 @@ from backend.models.db import init_db
 from backend.models.user import get_user_by_id
 from backend.routes.auth_routes import bp as auth_bp
 from backend.routes.intelligence_routes import bp as intelligence_bp
+from backend.routes.ml_routes import bp as ml_bp
+from backend.routes.vision_routes import bp as vision_bp
 from backend.routes.weather_routes import bp as weather_bp
 
 
@@ -30,6 +32,8 @@ def create_app() -> Flask:
     app.register_blueprint(weather_bp)
     app.register_blueprint(intelligence_bp)
     app.register_blueprint(auth_bp)
+    app.register_blueprint(ml_bp)
+    app.register_blueprint(vision_bp)
 
     @app.get("/")
     def index():

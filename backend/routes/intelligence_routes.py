@@ -15,6 +15,7 @@ from backend.services.analytics_service import build_analytics
 from backend.services.chatbot_service import chatbot_response
 from backend.services.climate_service import climate_insights_from_archive
 from backend.services.email_service import send_email_alert
+from backend.services.ml_prediction_service import ml_prediction_service
 from backend.services.travel_service import evaluate_travel_window
 from backend.services.weather_service import weather_service
 
@@ -214,6 +215,17 @@ def platform_bundle():
 
     alerts = evaluate_alerts(current, forecast.get("daily") or [], list_alert_rules(int(current_user.id)) if current_user.is_authenticated else None)
     analytics = build_analytics(forecast)
+    ml_raw = ml_prediction_service.predict_weather(
+        city=str(current.get("location", "")).split(",")[0].strip(),
+        lat=float(current.get("latitude")),
+        lon=float(current.get("longitude")),
+    )
+    ml_prediction = {
+        "temperature": ml_raw.get("temperature_prediction"),
+        "rainProbability": ml_raw.get("rain_probability"),
+        "confidence": ml_raw.get("confidence_score"),
+        "humidityTrend": ml_raw.get("humidity_trend"),
+    }
     summary = generate_weather_summary(
         {
             "temperatureC": current.get("tempC"),
@@ -233,6 +245,7 @@ def platform_bundle():
             "alerts": alerts,
             "activity": activity_payload,
             "aiSummary": summary,
+            "mlPrediction": ml_prediction,
         }
     )
 
