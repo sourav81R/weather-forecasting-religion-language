@@ -69,6 +69,13 @@ const WMO_TO_CONDITION = {
   96: "Thunderstorm",
   99: "Thunderstorm",
 };
+const CROP_PROFILES = {
+  rice: { tempMin: 20, tempMax: 35, weeklyRainMm: 35 },
+  wheat: { tempMin: 12, tempMax: 25, weeklyRainMm: 20 },
+  maize: { tempMin: 18, tempMax: 32, weeklyRainMm: 28 },
+  potato: { tempMin: 10, tempMax: 24, weeklyRainMm: 18 },
+  cotton: { tempMin: 21, tempMax: 34, weeklyRainMm: 22 },
+};
 
 const el = {
   appShell: document.getElementById("appShell"),
@@ -887,20 +894,42 @@ function renderForecast() {
   const pUnit = state.forecast?.units?.precipitation || "mm";
 
   el.forecastCards.innerHTML = daily
-    .map((day) => {
+    .map((day, index) => {
       const d = new Date(day.date);
       const label = Number.isNaN(d.getTime())
         ? day.date
         : d.toLocaleDateString(undefined, { weekday: "short", day: "2-digit", month: "short" });
-      return `<div class="forecast-card">
-        <strong>${label}</strong>
-        <div>${day.condition}</div>
-        <div>${Math.round(day.maxTemp)}${tUnit} / ${Math.round(day.minTemp)}${tUnit}</div>
-        <div>Rain: ${Math.round(day.rainProbability)}%</div>
-        <div>Wind: ${Math.round(day.windSpeed)} ${wUnit}</div>
-        <div>UV: ${Number(day.uvIndex).toFixed(1)}</div>
-        <div>Precip: ${Number(day.rainAmount).toFixed(1)} ${pUnit}</div>
-      </div>`;
+      const condition = String(day.condition || "Clouds");
+      const conditionKey = condition.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+      const symbol = WEATHER_SYMBOLS[condition] || "\uD83C\uDF24";
+      const maxTemp = Number.isFinite(Number(day.maxTemp)) ? Math.round(Number(day.maxTemp)) : "--";
+      const minTemp = Number.isFinite(Number(day.minTemp)) ? Math.round(Number(day.minTemp)) : "--";
+      const rain = Number.isFinite(Number(day.rainProbability)) ? Math.round(Number(day.rainProbability)) : "--";
+      const wind = Number.isFinite(Number(day.windSpeed)) ? Math.round(Number(day.windSpeed)) : "--";
+      const uv = Number.isFinite(Number(day.uvIndex)) ? Number(day.uvIndex).toFixed(1) : "--";
+      const precip = Number.isFinite(Number(day.rainAmount)) ? Number(day.rainAmount).toFixed(1) : "--";
+      const rainText = rain === "--" ? "--" : `${rain}%`;
+      const windText = wind === "--" ? "--" : `${wind} ${wUnit}`;
+      const precipText = precip === "--" ? "--" : `${precip} ${pUnit}`;
+      const lowText = minTemp === "--" ? "--" : `${minTemp}${tUnit}`;
+      const highText = maxTemp === "--" ? "--" : `${maxTemp}${tUnit}`;
+
+      return `<article class="forecast-card" data-condition="${escapeHtml(conditionKey)}" style="--forecast-order:${index};">
+        <div class="forecast-card-head">
+          <p class="forecast-day">${escapeHtml(label)}</p>
+          <p class="forecast-condition-chip"><span>${symbol}</span>${escapeHtml(condition)}</p>
+        </div>
+        <div class="forecast-temp-band">
+          <strong>${highText}</strong>
+          <span>Low ${lowText}</span>
+        </div>
+        <div class="forecast-meta-grid">
+          <div class="forecast-meta"><span>Rain</span><strong>${rainText}</strong></div>
+          <div class="forecast-meta"><span>Wind</span><strong>${windText}</strong></div>
+          <div class="forecast-meta"><span>UV</span><strong>${uv}</strong></div>
+          <div class="forecast-meta"><span>Precip</span><strong>${precipText}</strong></div>
+        </div>
+      </article>`;
     })
     .join("");
 
@@ -1103,27 +1132,41 @@ async function handleTravelPlanner() {
     setStatus("Travel planner needs destination and dates.", "error");
     return;
   }
+  if (endDate < startDate) {
+    el.travelResult.innerHTML = `<div class="list-item">End date must be on or after start date.</div>`;
+    return;
+  }
 
   try {
     if (state.staticMode) {
-      const start = new Date(startDate);
-      const end = new Date(endDate);
-      const daily = (state.forecast?.daily || []).filter((d) => {
-        const cur = new Date(d.date);
-        return cur >= start && cur <= end;
+      const units = el.unitsSelect.value === "imperial" ? "imperial" : "metric";
+      const geo = await staticGeocodeCity(destination);
+      const forecast = await staticFetchForecast(geo.latitude, geo.longitude, units);
+      const tUnit = forecast?.units?.temperature === "F" ? "\u00B0F" : "\u00B0C";
+      const daily = (forecast.daily || []).filter((d) => {
+        const date = String(d.date || "").slice(0, 10);
+        return date >= startDate && date <= endDate;
       });
       if (!daily.length) throw new Error("Date range is outside available forecast.");
       const scored = daily.map((d) => {
         const avg = (Number(d.maxTemp) + Number(d.minTemp)) / 2;
-        const score = Math.max(0, 100 - Math.abs(avg - 24) * 2 - Number(d.rainProbability) * 0.5 - Math.max(0, Number(d.windSpeed) - 25) * 1.1);
-        return { ...d, score: Number(score.toFixed(1)) };
+        const score =
+          100 -
+          Math.abs(avg - 24) * 2.3 -
+          Math.max(0, Number(d.rainProbability) - 20) * 0.6 -
+          Math.max(0, Number(d.windSpeed) - 24) * 0.9 -
+          Math.max(0, Number(d.uvIndex) - 6) * 2.5;
+        return { ...d, score: Number(Math.max(0, score).toFixed(1)) };
       });
       scored.sort((a, b) => b.score - a.score);
       const best = scored.slice(0, 3)
-        .map((d) => `<div class="list-item"><strong>${d.date}</strong> <span class="muted">Score ${d.score}</span><div>Rain ${d.rainProbability}% | Temp ${d.minTemp} to ${d.maxTemp}</div></div>`)
+        .map(
+          (d) =>
+            `<div class="list-item"><strong>${escapeHtml(d.date)}</strong> <span class="muted">Score ${d.score}</span><div>${escapeHtml(d.condition || "Clouds")} | Rain ${Math.round(Number(d.rainProbability) || 0)}% | Temp ${Math.round(Number(d.minTemp) || 0)}${tUnit} to ${Math.round(Number(d.maxTemp) || 0)}${tUnit}</div></div>`,
+        )
         .join("");
       const overall = Number((scored.reduce((a, b) => a + b.score, 0) / scored.length).toFixed(1));
-      el.travelResult.innerHTML = `<div class="list-item"><strong>Overall score</strong><div>${overall}/100</div><div>Static-mode local estimate for selected dates.</div></div>${best}`;
+      el.travelResult.innerHTML = `<div class="list-item"><strong>${escapeHtml(destination)}</strong><div>Overall score: ${overall}/100</div><div>Static-mode estimate for ${escapeHtml(startDate)} to ${escapeHtml(endDate)}.</div></div>${best}`;
       return;
     }
 
@@ -1131,10 +1174,14 @@ async function handleTravelPlanner() {
       method: "POST",
       body: JSON.stringify({ destination, startDate, endDate, units: el.unitsSelect.value }),
     });
+    const tUnit = el.unitsSelect.value === "imperial" ? "\u00B0F" : "\u00B0C";
     const days = (result.bestTravelDays || [])
-      .map((d) => `<div class="list-item"><strong>${d.date}</strong> <span class="muted">Score ${d.score}</span><div>Rain ${d.rainRisk}% | Temp ${d.tempRange[0]} to ${d.tempRange[1]}</div></div>`)
+      .map(
+        (d) =>
+          `<div class="list-item"><strong>${escapeHtml(d.date)}</strong> <span class="muted">Score ${d.score}</span><div>${escapeHtml(d.condition || "Clouds")} | Rain ${d.rainRisk}% | Temp ${d.tempRange[0]}${tUnit} to ${d.tempRange[1]}${tUnit}</div></div>`,
+      )
       .join("");
-    el.travelResult.innerHTML = `<div class="list-item"><strong>Overall score</strong><div>${result.weatherScore}/100</div><div>${result.recommendation}</div></div>${days}`;
+    el.travelResult.innerHTML = `<div class="list-item"><strong>${escapeHtml(result.destination || destination)}</strong><div>Overall score: ${result.weatherScore}/100</div><div>${escapeHtml(result.recommendation || "")}</div></div>${days}`;
   } catch (error) {
     el.travelResult.innerHTML = `<div class="list-item">${error.message}</div>`;
   }
@@ -1142,17 +1189,44 @@ async function handleTravelPlanner() {
 
 async function handleAgricultureAdvisor() {
   try {
+    const cropKey = String(el.cropType.value || "rice").toLowerCase();
+    const profile = CROP_PROFILES[cropKey] || CROP_PROFILES.rice;
     if (state.staticMode) {
       const daily = (state.forecast?.daily || []).slice(0, 7);
       if (!daily.length) throw new Error("Forecast unavailable.");
+      const avgTemp = daily.reduce((sum, d) => sum + (Number(d.maxTemp) + Number(d.minTemp)) / 2, 0) / daily.length;
       const rain = daily.reduce((sum, d) => sum + Number(d.rainAmount || 0), 0);
       const minTemp = Math.min(...daily.map((d) => Number(d.minTemp || 0)));
       const maxRainProb = Math.max(...daily.map((d) => Number(d.rainProbability || 0)));
+      const plantingDays = daily
+        .filter((d) => {
+          const avg = (Number(d.maxTemp) + Number(d.minTemp)) / 2;
+          return avg >= profile.tempMin && avg <= profile.tempMax && Number(d.rainProbability || 0) < 65;
+        })
+        .slice(0, 3)
+        .map((d) => String(d.date));
+      const plantingWindow = plantingDays.length
+        ? `Suitable planting days: ${plantingDays.join(", ")}.`
+        : "No strong planting window in the next 7 days.";
+      const irrigation =
+        rain >= profile.weeklyRainMm
+          ? "Natural rainfall likely sufficient; reduce supplemental irrigation."
+          : `Plan supplemental irrigation of approximately ${(profile.weeklyRainMm - rain).toFixed(1)} mm this week.`;
+      const advice = [];
+      if (avgTemp < profile.tempMin) advice.push("Average temperature is below crop comfort range; growth may slow.");
+      else if (avgTemp > profile.tempMax) advice.push("Average temperature is above ideal range; monitor crop stress and soil moisture.");
+      else advice.push("Temperature profile is within the crop comfort range.");
+      advice.push(maxRainProb >= 70 ? "High rain probability detected; prepare drainage and disease protection." : "No severe rain spikes expected this week.");
+      if (minTemp <= 2) advice.push("Frost risk is present; use crop covers during night hours.");
+      if (rain < profile.weeklyRainMm) advice.push("Rainfall may be insufficient; schedule irrigation cycles.");
+      const adviceHtml = advice.map((item) => `<div class="list-item">${escapeHtml(item)}</div>`).join("");
       el.agriResult.innerHTML = `
-        <div class="list-item"><strong>Irrigation</strong><div>${rain > 25 ? "Rain is likely sufficient; reduce manual irrigation." : "Plan supplemental irrigation this week."}</div></div>
-        <div class="list-item"><strong>Planting Window</strong><div>${maxRainProb < 65 ? "Next 3 days are suitable for planting." : "Delay planting until rain risk drops."}</div></div>
+        <div class="list-item"><strong>Crop</strong><div>${escapeHtml(capitalize(cropKey))} (ideal ${profile.tempMin} to ${profile.tempMax}\u00B0C, weekly rain target ${profile.weeklyRainMm} mm)</div></div>
+        <div class="list-item"><strong>Irrigation</strong><div>${escapeHtml(irrigation)}</div></div>
+        <div class="list-item"><strong>Planting Window</strong><div>${escapeHtml(plantingWindow)}</div></div>
         <div class="list-item"><strong>Rain Alert</strong><div>${maxRainProb >= 70 ? "High" : "Normal"}</div></div>
-        <div class="list-item"><strong>Frost Risk</strong><div>${minTemp <= 2 ? "Present" : "Low"}</div></div>`;
+        <div class="list-item"><strong>Frost Risk</strong><div>${minTemp <= 2 ? "Present" : "Low"}</div></div>
+        ${adviceHtml}`;
       return;
     }
 
@@ -1161,7 +1235,10 @@ async function handleAgricultureAdvisor() {
       body: JSON.stringify({ ...currentPayload(), ...locationPayload(), cropType: el.cropType.value }),
     });
     const advice = (result.advice || []).map((item) => `<div class="list-item">${item}</div>`).join("");
+    const cropName = capitalize(String(result.cropType || cropKey).toLowerCase());
+    const profileText = `ideal ${profile.tempMin} to ${profile.tempMax}\u00B0C, weekly rain target ${profile.weeklyRainMm} mm`;
     el.agriResult.innerHTML = `
+      <div class="list-item"><strong>Crop</strong><div>${escapeHtml(cropName)} (${profileText})</div></div>
       <div class="list-item"><strong>Irrigation</strong><div>${result.irrigationRecommendation}</div></div>
       <div class="list-item"><strong>Planting Window</strong><div>${result.plantingWindow}</div></div>
       <div class="list-item"><strong>Rain Alert</strong><div>${result.rainAlert ? "High" : "Normal"}</div></div>
@@ -1791,6 +1868,16 @@ function wireEvents() {
 
 function capitalize(value) {
   return value ? value.charAt(0).toUpperCase() + value.slice(1) : "";
+}
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (char) => {
+    if (char === "&") return "&amp;";
+    if (char === "<") return "&lt;";
+    if (char === ">") return "&gt;";
+    if (char === '"') return "&quot;";
+    return "&#39;";
+  });
 }
 
 async function initialize() {

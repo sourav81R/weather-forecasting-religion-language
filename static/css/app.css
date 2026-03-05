@@ -622,21 +622,195 @@ select:focus,
 
 .forecast-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  align-items: stretch;
 }
 
 .forecast-card {
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  background: linear-gradient(145deg, var(--panel-solid), rgba(255, 255, 255, 0.76));
-  padding: 10px;
-  transition: transform 180ms ease, box-shadow 180ms ease;
+  --forecast-accent: color-mix(in srgb, var(--brand) 60%, var(--brand-2));
+  position: relative;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--brand) 20%, var(--line));
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 100% 0, color-mix(in srgb, var(--forecast-accent) 18%, transparent) 0%, transparent 50%),
+    linear-gradient(160deg, color-mix(in srgb, var(--panel-solid) 94%, var(--brand-soft) 6%), color-mix(in srgb, var(--panel-solid) 98%, transparent));
+  padding: 13px;
+  min-height: 204px;
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  box-shadow: 0 10px 22px rgba(12, 43, 80, 0.08);
+  transition: transform 200ms ease, border-color 220ms ease, box-shadow 220ms ease;
+  animation: forecast-card-in 420ms ease both;
+  animation-delay: calc(var(--forecast-order, 0) * 30ms);
+}
+
+.forecast-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 10px;
+  right: 10px;
+  height: 3px;
+  border-radius: 99px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--forecast-accent) 80%, transparent), color-mix(in srgb, var(--forecast-accent) 38%, transparent));
+  opacity: 0.86;
+}
+
+.forecast-card::after {
+  content: "";
+  position: absolute;
+  top: -28%;
+  left: -48%;
+  width: 44%;
+  height: 156%;
+  transform: rotate(18deg);
+  background: linear-gradient(
+    120deg,
+    transparent 0%,
+    color-mix(in srgb, var(--forecast-accent) 18%, white) 48%,
+    transparent 100%
+  );
+  opacity: 0;
+  pointer-events: none;
+  transition: left 360ms ease, opacity 240ms ease;
 }
 
 .forecast-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(15, 45, 85, 0.16);
+  transform: translateY(-3px);
+  border-color: color-mix(in srgb, var(--forecast-accent) 30%, var(--line));
+  box-shadow: 0 16px 30px rgba(12, 43, 80, 0.15);
+}
+
+.forecast-card:hover::after {
+  left: 122%;
+  opacity: 0.56;
+}
+
+.forecast-card[data-condition*="rain"],
+.forecast-card[data-condition*="drizzle"] {
+  --forecast-accent: #1f8cff;
+}
+
+.forecast-card[data-condition*="thunderstorm"] {
+  --forecast-accent: #7f6cff;
+}
+
+.forecast-card[data-condition*="clear"] {
+  --forecast-accent: #f3a61f;
+}
+
+.forecast-card[data-condition*="snow"],
+.forecast-card[data-condition*="mist"],
+.forecast-card[data-condition*="fog"] {
+  --forecast-accent: #58b2c5;
+}
+
+.forecast-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.forecast-day {
+  margin: 0;
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 18px;
+  letter-spacing: -0.2px;
+}
+
+.forecast-condition-chip {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid color-mix(in srgb, var(--forecast-accent) 34%, var(--line));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--forecast-accent) 13%, transparent);
+  color: color-mix(in srgb, var(--forecast-accent) 54%, var(--text));
+  padding: 3px 9px;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.1;
+  transition: transform 200ms ease, box-shadow 220ms ease;
+}
+
+.forecast-condition-chip span {
+  font-size: 13px;
+}
+
+.forecast-temp-band {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.forecast-temp-band strong {
+  font-size: clamp(30px, 2.2vw, 34px);
+  line-height: 1;
+  font-family: var(--font-head);
+  letter-spacing: -0.8px;
+}
+
+.forecast-temp-band span {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.forecast-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.forecast-meta {
+  border: 1px solid color-mix(in srgb, var(--line) 86%, var(--forecast-accent) 14%);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--panel-solid) 96%, var(--forecast-accent) 4%);
+  padding: 7px 8px;
+  transition: transform 200ms ease, border-color 200ms ease, background-color 200ms ease;
+}
+
+.forecast-card:hover .forecast-meta {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--forecast-accent) 30%, var(--line));
+  background: color-mix(in srgb, var(--panel-solid) 88%, var(--forecast-accent) 12%);
+}
+
+.forecast-card:hover .forecast-condition-chip {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 14px color-mix(in srgb, var(--forecast-accent) 24%, transparent);
+}
+
+.forecast-meta span {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+.forecast-meta strong {
+  display: block;
+  margin-top: 2px;
+  font-size: 14px;
+}
+
+@keyframes forecast-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .form-grid {
