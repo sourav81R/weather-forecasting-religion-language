@@ -1,4 +1,5 @@
 const CACHE_KEY = "weather-studio-cache-v2";
+const PWA_CACHE_NAME = "weather-studio-pwa-v7";
 const FAVORITES_KEY = "weather-studio-favorites-v2";
 const LAST_COORDS_KEY = "weather-studio-last-coords-v2";
 const QUICK_CITIES = ["Kolkata", "Delhi", "Mumbai", "Chennai", "Dhaka", "Bengaluru"];
@@ -68,7 +69,10 @@ const WMO_TO_CONDITION = {
 };
 
 const el = {
+  appShell: document.getElementById("appShell"),
+  sidebar: document.querySelector(".sidebar"),
   nav: document.getElementById("sidebarNav"),
+  sidebarToggle: document.getElementById("sidebarToggle"),
   cityInput: document.getElementById("cityInput"),
   fetchBtn: document.getElementById("fetchBtn"),
   locateBtn: document.getElementById("locateBtn"),
@@ -1097,6 +1101,48 @@ function setupSectionNavigation() {
     if (section === "analytics" && state.analytics) {
       requestAnimationFrame(() => renderAnalytics());
     }
+    if (isMobileNavViewport()) closeSidebarNav();
+  });
+}
+
+function isMobileNavViewport() {
+  if (typeof window === "undefined") return false;
+  if (typeof window.matchMedia === "function") return window.matchMedia("(max-width: 1080px)").matches;
+  return window.innerWidth <= 1080;
+}
+
+function closeSidebarNav() {
+  if (!el.appShell) return;
+  el.appShell.classList.remove("sidebar-open");
+  if (el.sidebarToggle) el.sidebarToggle.setAttribute("aria-expanded", "false");
+}
+
+function toggleSidebarNav() {
+  if (!el.appShell || !el.sidebarToggle || !isMobileNavViewport()) return;
+  const willOpen = !el.appShell.classList.contains("sidebar-open");
+  el.appShell.classList.toggle("sidebar-open", willOpen);
+  el.sidebarToggle.setAttribute("aria-expanded", willOpen ? "true" : "false");
+}
+
+function setupResponsiveSidebar() {
+  if (!el.sidebarToggle || !el.appShell || !el.sidebar) return;
+
+  el.sidebarToggle.addEventListener("click", () => toggleSidebarNav());
+
+  document.addEventListener("click", (event) => {
+    if (!isMobileNavViewport() || !el.appShell.classList.contains("sidebar-open")) return;
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    if (target.closest(".sidebar")) return;
+    closeSidebarNav();
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closeSidebarNav();
+  });
+
+  window.addEventListener("resize", () => {
+    if (!isMobileNavViewport()) closeSidebarNav();
   });
 }
 
@@ -1442,7 +1488,21 @@ async function fetchConfig() {
 }
 
 function setupPwa() {
-  if ("serviceWorker" in navigator) navigator.serviceWorker.register("/service-worker.js").catch(() => {});
+  if ("caches" in window) {
+    caches
+      .keys()
+      .then((keys) =>
+        Promise.all(keys.filter((key) => key.startsWith("weather-studio-pwa-") && key !== PWA_CACHE_NAME).map((key) => caches.delete(key)))
+      )
+      .catch(() => {});
+  }
+
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker
+      .register("/service-worker.js")
+      .then((registration) => registration.update().catch(() => {}))
+      .catch(() => {});
+  }
   window.addEventListener("beforeinstallprompt", (event) => {
     event.preventDefault();
     state.deferredPrompt = event;
@@ -1513,6 +1573,7 @@ async function initialize() {
   }
 
   setupSectionNavigation();
+  setupResponsiveSidebar();
   setupQuickCities();
   renderLocalFavorites();
   setupFavoritesEvents();
