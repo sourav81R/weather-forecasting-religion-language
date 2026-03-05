@@ -1,6 +1,9 @@
 const CACHE_KEY = "weather-studio-cache-v2";
+const PWA_CACHE_NAME = "weather-studio-pwa-v12";
 const FAVORITES_KEY = "weather-studio-favorites-v2";
 const LAST_COORDS_KEY = "weather-studio-last-coords-v2";
+const LUNAR_CYCLE_DAYS = 29.53058867;
+const REFERENCE_NEW_MOON_UTC_MS = Date.UTC(2000, 0, 6, 18, 14, 0);
 const QUICK_CITIES = ["Kolkata", "Delhi", "Mumbai", "Chennai", "Dhaka", "Bengaluru"];
 const OPENWEATHER_ENDPOINT = "https://api.openweathermap.org/data/2.5/weather";
 const OPENMETEO_ENDPOINT = "https://api.open-meteo.com/v1/forecast";
@@ -68,13 +71,17 @@ const WMO_TO_CONDITION = {
 };
 
 const el = {
+  appShell: document.getElementById("appShell"),
+  sidebar: document.querySelector(".sidebar"),
   nav: document.getElementById("sidebarNav"),
+  sidebarToggle: document.getElementById("sidebarToggle"),
   cityInput: document.getElementById("cityInput"),
   fetchBtn: document.getElementById("fetchBtn"),
   locateBtn: document.getElementById("locateBtn"),
   languageSelect: document.getElementById("languageSelect"),
   unitsSelect: document.getElementById("unitsSelect"),
   apiKeyInput: document.getElementById("apiKeyInput"),
+  themeToggleBtn: document.getElementById("themeToggleBtn"),
   statusText: document.getElementById("statusText"),
   quickCities: document.getElementById("quickCities"),
   favoriteCities: document.getElementById("favoriteCities"),
@@ -203,7 +210,7 @@ async function staticFetchCurrentFallback(payload, units) {
   const params = new URLSearchParams({
     latitude: String(coords.latitude),
     longitude: String(coords.longitude),
-    current: "temperature_2m,apparent_temperature,relative_humidity_2m,surface_pressure,cloud_cover,wind_speed_10m,weather_code",
+    current: "temperature_2m,apparent_temperature,relative_humidity_2m,surface_pressure,cloud_cover,wind_speed_10m,weather_code,is_day",
     daily: "sunrise,sunset",
     forecast_days: "1",
     temperature_unit: units === "imperial" ? "fahrenheit" : "celsius",
@@ -218,6 +225,8 @@ async function staticFetchCurrentFallback(payload, units) {
   const windSpeed = Number(current.wind_speed_10m || 0);
   const temp = Number(current.temperature_2m);
   const condition = WMO_TO_CONDITION[Number(current.weather_code)] || "Clouds";
+  const isDayValue = Number(current.is_day);
+  const isDay = Number.isFinite(isDayValue) ? isDayValue === 1 : undefined;
   let location = payload.city || "";
   try {
     location = (await staticReverseGeocode(coords.latitude, coords.longitude)) || location;
@@ -232,6 +241,7 @@ async function staticFetchCurrentFallback(payload, units) {
     description: condition.toLowerCase(),
     condition,
     symbol: WEATHER_SYMBOLS[condition] || "\uD83C\uDF24",
+    isDay,
     feelsLike: Number(current.apparent_temperature || temp || 0),
     humidity: Number(current.relative_humidity_2m || 0),
     windSpeed,
@@ -243,6 +253,7 @@ async function staticFetchCurrentFallback(payload, units) {
     source: "open-meteo fallback",
     latitude: coords.latitude,
     longitude: coords.longitude,
+    weatherCode: Number(current.weather_code),
     tempC: units === "imperial" ? ((temp - 32) * 5) / 9 : temp,
     windKmh: units === "imperial" ? windSpeed * 1.60934 : windSpeed * 3.6,
   };
@@ -277,6 +288,8 @@ async function staticFetchCurrent(payload) {
         const timezone = Number(data.timezone || 0);
         const condition = weather.main || "";
         const temp = Number(main.temp);
+        const iconCode = String(weather.icon || "");
+        const isDay = iconCode.endsWith("d") ? true : iconCode.endsWith("n") ? false : undefined;
         return {
           location: `${data.name || ""}${sys.country ? `, ${sys.country}` : ""}`,
           temperature: main.temp,
@@ -284,6 +297,8 @@ async function staticFetchCurrent(payload) {
           description: weather.description || "",
           condition,
           symbol: WEATHER_SYMBOLS[condition] || "\uD83C\uDF24",
+          iconCode,
+          isDay,
           feelsLike: main.feels_like,
           humidity: main.humidity,
           windSpeed: wind.speed,
@@ -292,6 +307,7 @@ async function staticFetchCurrent(payload) {
           clouds: clouds.all,
           sunrise: formatLocalTime(sys.sunrise, timezone),
           sunset: formatLocalTime(sys.sunset, timezone),
+          timezoneOffsetSeconds: timezone,
           source: key === payload.apiKey ? "custom key" : "inbuilt key",
           latitude: Number(coord.lat),
           longitude: Number(coord.lon),
@@ -486,6 +502,95 @@ function formatIsoTime(isoTs) {
   const hh = String(local.getHours()).padStart(2, "0");
   const mm = String(local.getMinutes()).padStart(2, "0");
   return `${hh}:${mm}`;
+}
+
+function parseClockToMinutes(value) {
+  const match = String(value || "").trim().match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null;
+  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
+  return hours * 60 + minutes;
+}
+
+function inferIsDay(c) {
+  if (typeof c?.isDay === "boolean") return c.isDay;
+  const iconCode = String(c?.iconCode || "");
+  if (iconCode.endsWith("d")) return true;
+  if (iconCode.endsWith("n")) return false;
+
+  const sunriseMinutes = parseClockToMinutes(c?.sunrise);
+  const sunsetMinutes = parseClockToMinutes(c?.sunset);
+  if (sunriseMinutes === null || sunsetMinutes === null) return null;
+
+  const timezoneOffset = Number(c?.timezoneOffsetSeconds);
+  const localNow = new Date();
+  const nowMinutes = Number.isFinite(timezoneOffset)
+    ? (() => {
+        const zoned = new Date(Date.now() + timezoneOffset * 1000);
+        return zoned.getUTCHours() * 60 + zoned.getUTCMinutes();
+      })()
+    : localNow.getHours() * 60 + localNow.getMinutes();
+  return nowMinutes >= sunriseMinutes && nowMinutes < sunsetMinutes;
+}
+
+function localNoonUtcMs(timezoneOffsetSeconds) {
+  if (!Number.isFinite(Number(timezoneOffsetSeconds))) return Date.now();
+  const offset = Number(timezoneOffsetSeconds);
+  const shiftedNow = new Date(Date.now() + offset * 1000);
+  const y = shiftedNow.getUTCFullYear();
+  const m = shiftedNow.getUTCMonth();
+  const d = shiftedNow.getUTCDate();
+  return Date.UTC(y, m, d, 12, 0, 0) - offset * 1000;
+}
+
+function lunarPhaseFraction(atUtcMs) {
+  const cycleAgeDays = (atUtcMs - REFERENCE_NEW_MOON_UTC_MS) / 86400000;
+  const phase = ((cycleAgeDays / LUNAR_CYCLE_DAYS) % 1 + 1) % 1;
+  return phase;
+}
+
+function resolveNightMoonSymbol(c) {
+  const phase = lunarPhaseFraction(localNoonUtcMs(c?.timezoneOffsetSeconds));
+
+  // Per request: show half-moon on new-moon day.
+  if (phase < 0.035 || phase > 0.965) return "\uD83C\uDF13";
+  if (Math.abs(phase - 0.5) <= 0.035) return "\uD83C\uDF15";
+  if (phase < 0.125) return "\uD83C\uDF12";
+  if (phase < 0.25) return "\uD83C\uDF13";
+  if (phase < 0.375) return "\uD83C\uDF14";
+  if (phase < 0.625) return "\uD83C\uDF15";
+  if (phase < 0.75) return "\uD83C\uDF16";
+  if (phase < 0.875) return "\uD83C\uDF17";
+  return "\uD83C\uDF18";
+}
+
+function resolveConditionSymbol(c) {
+  const condition = String(c?.condition || "").trim();
+  const description = String(c?.description || "").toLowerCase();
+  const clouds = Number(c?.clouds);
+  const isDay = inferIsDay(c);
+
+  if (condition === "Thunderstorm" || description.includes("thunder")) return "\u26C8";
+  if (condition === "Snow" || description.includes("snow")) return "\uD83C\uDF28";
+  if (condition === "Mist" || condition === "Fog" || description.includes("mist") || description.includes("fog") || description.includes("haze")) {
+    return "\uD83C\uDF2B";
+  }
+  if (condition === "Rain" || condition === "Drizzle" || description.includes("rain") || description.includes("drizzle") || description.includes("shower")) {
+    if (Number.isFinite(clouds) && clouds >= 70) return "\uD83C\uDF27";
+    return isDay === false ? "\u2601" : "\uD83C\uDF26";
+  }
+  if (condition === "Clouds" || description.includes("cloud")) {
+    return isDay === false ? "\u2601" : "\u26C5";
+  }
+  if (condition === "Clear" || description.includes("clear") || description.includes("sun")) {
+    return isDay === false ? resolveNightMoonSymbol(c) : "\uD83C\uDF1E";
+  }
+
+  if (isDay === false) return resolveNightMoonSymbol(c);
+  if (isDay === true) return "\u2600";
+  return c?.symbol || "\u2601";
 }
 
 function i18nLanguageCode(languageName) {
@@ -692,7 +797,7 @@ function applyBundle(bundle) {
 function renderCurrent() {
   if (!state.current) return;
   const c = state.current;
-  el.conditionSymbol.textContent = c.symbol || "\u2601";
+  el.conditionSymbol.textContent = resolveConditionSymbol(c);
   el.temperatureText.textContent = `${c.temperature ?? "--"} ${c.temperatureUnit || ""}`.trim();
   const baseDescription = c.description || "--";
   el.descriptionText.textContent = baseDescription;
@@ -1097,6 +1202,48 @@ function setupSectionNavigation() {
     if (section === "analytics" && state.analytics) {
       requestAnimationFrame(() => renderAnalytics());
     }
+    if (isMobileNavViewport()) closeSidebarNav();
+  });
+}
+
+function isMobileNavViewport() {
+  if (typeof window === "undefined") return false;
+  if (typeof window.matchMedia === "function") return window.matchMedia("(max-width: 1080px)").matches;
+  return window.innerWidth <= 1080;
+}
+
+function closeSidebarNav() {
+  if (!el.appShell) return;
+  el.appShell.classList.remove("sidebar-open");
+  if (el.sidebarToggle) el.sidebarToggle.setAttribute("aria-expanded", "false");
+}
+
+function toggleSidebarNav() {
+  if (!el.appShell || !el.sidebarToggle || !isMobileNavViewport()) return;
+  const willOpen = !el.appShell.classList.contains("sidebar-open");
+  el.appShell.classList.toggle("sidebar-open", willOpen);
+  el.sidebarToggle.setAttribute("aria-expanded", willOpen ? "true" : "false");
+}
+
+function setupResponsiveSidebar() {
+  if (!el.sidebarToggle || !el.appShell || !el.sidebar) return;
+
+  el.sidebarToggle.addEventListener("click", () => toggleSidebarNav());
+
+  document.addEventListener("click", (event) => {
+    if (!isMobileNavViewport() || !el.appShell.classList.contains("sidebar-open")) return;
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    if (target.closest(".sidebar")) return;
+    closeSidebarNav();
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closeSidebarNav();
+  });
+
+  window.addEventListener("resize", () => {
+    if (!isMobileNavViewport()) closeSidebarNav();
   });
 }
 
@@ -1271,7 +1418,17 @@ async function savePreferences() {
 }
 
 function applyDarkMode() {
-  document.body.classList.toggle("dark", el.darkModeToggle.checked);
+  const isDark = Boolean(el.darkModeToggle?.checked);
+  document.body.classList.toggle("dark", isDark);
+  if (el.themeToggleBtn) {
+    const iconNode = el.themeToggleBtn.querySelector(".theme-toggle-icon");
+    if (iconNode) iconNode.textContent = isDark ? "\u2600" : "\uD83C\uDF19";
+    const nextModeLabel = isDark ? "Switch to light mode" : "Switch to dark mode";
+    el.themeToggleBtn.setAttribute("aria-label", nextModeLabel);
+    el.themeToggleBtn.setAttribute("title", nextModeLabel);
+    el.themeToggleBtn.setAttribute("aria-pressed", isDark ? "true" : "false");
+  }
+  localStorage.setItem("weather-studio-dark-mode", isDark ? "1" : "0");
 }
 
 async function saveCurrentCityToServer() {
@@ -1442,7 +1599,21 @@ async function fetchConfig() {
 }
 
 function setupPwa() {
-  if ("serviceWorker" in navigator) navigator.serviceWorker.register("/service-worker.js").catch(() => {});
+  if ("caches" in window) {
+    caches
+      .keys()
+      .then((keys) =>
+        Promise.all(keys.filter((key) => key.startsWith("weather-studio-pwa-") && key !== PWA_CACHE_NAME).map((key) => caches.delete(key)))
+      )
+      .catch(() => {});
+  }
+
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker
+      .register("/service-worker.js")
+      .then((registration) => registration.update().catch(() => {}))
+      .catch(() => {});
+  }
   window.addEventListener("beforeinstallprompt", (event) => {
     event.preventDefault();
     state.deferredPrompt = event;
@@ -1491,6 +1662,12 @@ function wireEvents() {
   el.logoutBtn.addEventListener("click", () => void authLogout());
   el.saveSettingsBtn.addEventListener("click", () => void savePreferences());
   el.darkModeToggle.addEventListener("change", applyDarkMode);
+  if (el.themeToggleBtn) {
+    el.themeToggleBtn.addEventListener("click", () => {
+      el.darkModeToggle.checked = !el.darkModeToggle.checked;
+      applyDarkMode();
+    });
+  }
   el.unitsSelect.addEventListener("change", () => {
     if (state.current) void loadPlatformBundle(locationPayload());
   });
@@ -1513,6 +1690,7 @@ async function initialize() {
   }
 
   setupSectionNavigation();
+  setupResponsiveSidebar();
   setupQuickCities();
   renderLocalFavorites();
   setupFavoritesEvents();
