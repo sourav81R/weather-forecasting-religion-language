@@ -251,6 +251,13 @@ select {
   gap: 4px;
 }
 
+.topbar-head-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .topbar-kicker {
   margin: 0;
   font-size: 11px;
@@ -264,6 +271,14 @@ select {
   margin: 0;
   font-size: clamp(18px, 2.2vw, 28px);
   letter-spacing: -0.2px;
+}
+
+.theme-toggle-btn {
+  min-height: 40px;
+  padding: 8px 12px;
+  font-size: 14px;
+  white-space: nowrap;
+  margin-left: auto;
 }
 
 .search-controls {
@@ -727,6 +742,10 @@ select:focus,
     gap: 12px;
   }
 
+  .topbar-head-row {
+    flex-wrap: wrap;
+  }
+
   .topbar,
   .card,
   .chatbot {
@@ -744,6 +763,11 @@ select:focus,
 }
 
 @media (max-width: 520px) {
+  .theme-toggle-btn {
+    width: 100%;
+    margin-left: 0;
+  }
+
   .metric-grid,
   .chat-input-row {
     grid-template-columns: 1fr;

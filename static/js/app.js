@@ -1,5 +1,5 @@
 const CACHE_KEY = "weather-studio-cache-v2";
-const PWA_CACHE_NAME = "weather-studio-pwa-v7";
+const PWA_CACHE_NAME = "weather-studio-pwa-v9";
 const FAVORITES_KEY = "weather-studio-favorites-v2";
 const LAST_COORDS_KEY = "weather-studio-last-coords-v2";
 const QUICK_CITIES = ["Kolkata", "Delhi", "Mumbai", "Chennai", "Dhaka", "Bengaluru"];
@@ -79,6 +79,7 @@ const el = {
   languageSelect: document.getElementById("languageSelect"),
   unitsSelect: document.getElementById("unitsSelect"),
   apiKeyInput: document.getElementById("apiKeyInput"),
+  themeToggleBtn: document.getElementById("themeToggleBtn"),
   statusText: document.getElementById("statusText"),
   quickCities: document.getElementById("quickCities"),
   favoriteCities: document.getElementById("favoriteCities"),
@@ -207,7 +208,7 @@ async function staticFetchCurrentFallback(payload, units) {
   const params = new URLSearchParams({
     latitude: String(coords.latitude),
     longitude: String(coords.longitude),
-    current: "temperature_2m,apparent_temperature,relative_humidity_2m,surface_pressure,cloud_cover,wind_speed_10m,weather_code",
+    current: "temperature_2m,apparent_temperature,relative_humidity_2m,surface_pressure,cloud_cover,wind_speed_10m,weather_code,is_day",
     daily: "sunrise,sunset",
     forecast_days: "1",
     temperature_unit: units === "imperial" ? "fahrenheit" : "celsius",
@@ -222,6 +223,8 @@ async function staticFetchCurrentFallback(payload, units) {
   const windSpeed = Number(current.wind_speed_10m || 0);
   const temp = Number(current.temperature_2m);
   const condition = WMO_TO_CONDITION[Number(current.weather_code)] || "Clouds";
+  const isDayValue = Number(current.is_day);
+  const isDay = Number.isFinite(isDayValue) ? isDayValue === 1 : undefined;
   let location = payload.city || "";
   try {
     location = (await staticReverseGeocode(coords.latitude, coords.longitude)) || location;
@@ -236,6 +239,7 @@ async function staticFetchCurrentFallback(payload, units) {
     description: condition.toLowerCase(),
     condition,
     symbol: WEATHER_SYMBOLS[condition] || "\uD83C\uDF24",
+    isDay,
     feelsLike: Number(current.apparent_temperature || temp || 0),
     humidity: Number(current.relative_humidity_2m || 0),
     windSpeed,
@@ -247,6 +251,7 @@ async function staticFetchCurrentFallback(payload, units) {
     source: "open-meteo fallback",
     latitude: coords.latitude,
     longitude: coords.longitude,
+    weatherCode: Number(current.weather_code),
     tempC: units === "imperial" ? ((temp - 32) * 5) / 9 : temp,
     windKmh: units === "imperial" ? windSpeed * 1.60934 : windSpeed * 3.6,
   };
@@ -281,6 +286,8 @@ async function staticFetchCurrent(payload) {
         const timezone = Number(data.timezone || 0);
         const condition = weather.main || "";
         const temp = Number(main.temp);
+        const iconCode = String(weather.icon || "");
+        const isDay = iconCode.endsWith("d") ? true : iconCode.endsWith("n") ? false : undefined;
         return {
           location: `${data.name || ""}${sys.country ? `, ${sys.country}` : ""}`,
           temperature: main.temp,
@@ -288,6 +295,8 @@ async function staticFetchCurrent(payload) {
           description: weather.description || "",
           condition,
           symbol: WEATHER_SYMBOLS[condition] || "\uD83C\uDF24",
+          iconCode,
+          isDay,
           feelsLike: main.feels_like,
           humidity: main.humidity,
           windSpeed: wind.speed,
@@ -296,6 +305,7 @@ async function staticFetchCurrent(payload) {
           clouds: clouds.all,
           sunrise: formatLocalTime(sys.sunrise, timezone),
           sunset: formatLocalTime(sys.sunset, timezone),
+          timezoneOffsetSeconds: timezone,
           source: key === payload.apiKey ? "custom key" : "inbuilt key",
           latitude: Number(coord.lat),
           longitude: Number(coord.lon),
@@ -490,6 +500,64 @@ function formatIsoTime(isoTs) {
   const hh = String(local.getHours()).padStart(2, "0");
   const mm = String(local.getMinutes()).padStart(2, "0");
   return `${hh}:${mm}`;
+}
+
+function parseClockToMinutes(value) {
+  const match = String(value || "").trim().match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null;
+  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
+  return hours * 60 + minutes;
+}
+
+function inferIsDay(c) {
+  if (typeof c?.isDay === "boolean") return c.isDay;
+  const iconCode = String(c?.iconCode || "");
+  if (iconCode.endsWith("d")) return true;
+  if (iconCode.endsWith("n")) return false;
+
+  const sunriseMinutes = parseClockToMinutes(c?.sunrise);
+  const sunsetMinutes = parseClockToMinutes(c?.sunset);
+  if (sunriseMinutes === null || sunsetMinutes === null) return null;
+
+  const timezoneOffset = Number(c?.timezoneOffsetSeconds);
+  const localNow = new Date();
+  const nowMinutes = Number.isFinite(timezoneOffset)
+    ? (() => {
+        const zoned = new Date(Date.now() + timezoneOffset * 1000);
+        return zoned.getUTCHours() * 60 + zoned.getUTCMinutes();
+      })()
+    : localNow.getHours() * 60 + localNow.getMinutes();
+  return nowMinutes >= sunriseMinutes && nowMinutes < sunsetMinutes;
+}
+
+function resolveConditionSymbol(c) {
+  const condition = String(c?.condition || "").trim();
+  const description = String(c?.description || "").toLowerCase();
+  const clouds = Number(c?.clouds);
+  const isDay = inferIsDay(c);
+
+  if (condition === "Thunderstorm" || description.includes("thunder")) return "\u26C8";
+  if (condition === "Snow" || description.includes("snow")) return "\uD83C\uDF28";
+  if (condition === "Mist" || condition === "Fog" || description.includes("mist") || description.includes("fog") || description.includes("haze")) {
+    return "\uD83C\uDF2B";
+  }
+  if (condition === "Rain" || condition === "Drizzle" || description.includes("rain") || description.includes("drizzle") || description.includes("shower")) {
+    if (Number.isFinite(clouds) && clouds >= 70) return "\uD83C\uDF27";
+    return isDay === false ? "\u2601" : "\uD83C\uDF26";
+  }
+  if (condition === "Clouds" || description.includes("cloud")) {
+    return isDay === false ? "\u2601" : "\u26C5";
+  }
+  if (condition === "Clear" || description.includes("clear") || description.includes("sun")) {
+    return isDay === false ? "\uD83C\uDF19" : "\uD83C\uDF1E";
+  }
+
+  if (isDay === false) return "\uD83C\uDF19";
+  if (isDay === true) return "\u2600";
+  return c?.symbol || "\u2601";
 }
 
 function i18nLanguageCode(languageName) {
@@ -696,7 +764,7 @@ function applyBundle(bundle) {
 function renderCurrent() {
   if (!state.current) return;
   const c = state.current;
-  el.conditionSymbol.textContent = c.symbol || "\u2601";
+  el.conditionSymbol.textContent = resolveConditionSymbol(c);
   el.temperatureText.textContent = `${c.temperature ?? "--"} ${c.temperatureUnit || ""}`.trim();
   const baseDescription = c.description || "--";
   el.descriptionText.textContent = baseDescription;
@@ -1317,7 +1385,13 @@ async function savePreferences() {
 }
 
 function applyDarkMode() {
-  document.body.classList.toggle("dark", el.darkModeToggle.checked);
+  const isDark = Boolean(el.darkModeToggle?.checked);
+  document.body.classList.toggle("dark", isDark);
+  if (el.themeToggleBtn) {
+    el.themeToggleBtn.textContent = isDark ? "Light Mode" : "Dark Mode";
+    el.themeToggleBtn.setAttribute("aria-pressed", isDark ? "true" : "false");
+  }
+  localStorage.setItem("weather-studio-dark-mode", isDark ? "1" : "0");
 }
 
 async function saveCurrentCityToServer() {
@@ -1551,6 +1625,12 @@ function wireEvents() {
   el.logoutBtn.addEventListener("click", () => void authLogout());
   el.saveSettingsBtn.addEventListener("click", () => void savePreferences());
   el.darkModeToggle.addEventListener("change", applyDarkMode);
+  if (el.themeToggleBtn) {
+    el.themeToggleBtn.addEventListener("click", () => {
+      el.darkModeToggle.checked = !el.darkModeToggle.checked;
+      applyDarkMode();
+    });
+  }
   el.unitsSelect.addEventListener("change", () => {
     if (state.current) void loadPlatformBundle(locationPayload());
   });

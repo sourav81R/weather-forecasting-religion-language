@@ -299,6 +299,8 @@ class WeatherService:
         timezone_offset = int(payload.get("timezone", 0))
 
         condition = str(weather.get("main", ""))
+        icon_code = str(weather.get("icon", ""))
+        is_day = True if icon_code.endswith("d") else False if icon_code.endswith("n") else None
         city = str(payload.get("name", ""))
         country = str(sys_info.get("country", ""))
         location = f"{city}, {country}" if country else city
@@ -310,6 +312,8 @@ class WeatherService:
             "description": weather.get("description", ""),
             "condition": condition,
             "symbol": WEATHER_SYMBOLS.get(condition, "\U0001F324"),
+            "iconCode": icon_code,
+            "isDay": is_day,
             "feelsLike": main.get("feels_like"),
             "humidity": main.get("humidity"),
             "windSpeed": wind.get("speed"),
@@ -318,6 +322,7 @@ class WeatherService:
             "clouds": clouds.get("all"),
             "sunrise": self._format_local_time(sys_info.get("sunrise"), timezone_offset),
             "sunset": self._format_local_time(sys_info.get("sunset"), timezone_offset),
+            "timezoneOffsetSeconds": timezone_offset,
             "source": self._source_label(source),
             "latitude": coord.get("lat"),
             "longitude": coord.get("lon"),
