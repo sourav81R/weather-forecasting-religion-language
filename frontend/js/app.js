@@ -99,6 +99,7 @@ const el = {
   metricGrid: document.getElementById("metricGrid"),
   aiSummary: document.getElementById("aiSummary"),
   activityList: document.getElementById("activityList"),
+  mlPredictionList: document.getElementById("mlPredictionList"),
   forecastCards: document.getElementById("forecastCards"),
   outdoorWindow: document.getElementById("outdoorWindow"),
   climateNarrative: document.getElementById("climateNarrative"),
@@ -146,6 +147,7 @@ const state = {
   forecast: null,
   analytics: null,
   activity: null,
+  mlPrediction: null,
   alerts: [],
   coords: null,
   charts: {},
@@ -471,6 +473,31 @@ function staticBuildSummary(current, forecast) {
   return `Today is expected to be ${tempWord} and ${humidityWord}. Rain chance is around ${Math.round(rain)}% with winds near ${Math.round(wind)} km/h. ${advice}`;
 }
 
+function staticBuildMlPrediction(current, forecast) {
+  const daily = forecast.daily || [];
+  const tomorrow = daily[1] || daily[0] || {};
+  const tMin = Number(tomorrow.minTemp || current.tempC || current.temperature || 0);
+  const tMax = Number(tomorrow.maxTemp || current.tempC || current.temperature || 0);
+  const rainProbability = Number(tomorrow.rainProbability || 0) / 100;
+
+  const hourly = forecast.hourly || [];
+  const firstWindow = hourly.slice(0, 24).map((h) => Number(h.humidity || 0));
+  const secondWindow = hourly.slice(24, 48).map((h) => Number(h.humidity || 0));
+  let humidityTrend = "stable";
+  if (firstWindow.length && secondWindow.length) {
+    const firstAvg = firstWindow.reduce((sum, value) => sum + value, 0) / firstWindow.length;
+    const secondAvg = secondWindow.reduce((sum, value) => sum + value, 0) / secondWindow.length;
+    humidityTrend = secondAvg > firstAvg ? "increasing" : secondAvg < firstAvg ? "decreasing" : "stable";
+  }
+
+  return {
+    temperature: Number(((tMin + tMax) / 2).toFixed(1)),
+    rainProbability: Number(Math.max(0, Math.min(1, rainProbability)).toFixed(2)),
+    confidence: 0.55,
+    humidityTrend,
+  };
+}
+
 async function staticBuildBundle(payload) {
   let location = { ...payload };
   if (!location.city && (!Number.isFinite(Number(location.latitude)) || !Number.isFinite(Number(location.longitude)))) {
@@ -491,6 +518,7 @@ async function staticBuildBundle(payload) {
     activity,
     alerts: staticBuildAlerts(current, forecast, []),
     aiSummary: staticBuildSummary(current, forecast),
+    mlPrediction: staticBuildMlPrediction(current, forecast),
   };
 }
 
@@ -798,6 +826,7 @@ function applyBundle(bundle) {
   state.forecast = bundle.forecast;
   state.analytics = bundle.analytics;
   state.activity = bundle.activity;
+  state.mlPrediction = bundle.mlPrediction || bundle.ml_prediction || null;
   state.alerts = bundle.alerts || [];
   state.coords = { latitude: Number(bundle.current.latitude), longitude: Number(bundle.current.longitude) };
   localStorage.setItem(LAST_COORDS_KEY, JSON.stringify(state.coords));
@@ -806,6 +835,7 @@ function applyBundle(bundle) {
   renderForecast();
   renderAnalytics();
   renderActivity();
+  renderMlPrediction();
   renderAlerts(state.alerts);
   renderAiSummary(bundle.aiSummary);
   addFavorite((state.current.location || "").split(",")[0]);
@@ -881,6 +911,36 @@ function renderActivity() {
     .map((item) => `<div class="list-item"><strong>${capitalize(item.activity)}</strong> <span class="muted">${item.score}/100</span><div>${item.recommendation}</div></div>`)
     .join("");
 }
+
+function renderMlPrediction() {
+  if (!el.mlPredictionList) return;
+  const prediction = state.mlPrediction;
+  if (!prediction) {
+    el.mlPredictionList.innerHTML = `<div class="list-item">ML prediction unavailable.</div>`;
+    return;
+  }
+
+  let temp = "--";
+  if (Number.isFinite(Number(prediction.temperature))) {
+    const tempC = Number(prediction.temperature);
+    if (el.unitsSelect?.value === "imperial") {
+      temp = `${((tempC * 9) / 5 + 32).toFixed(1)}\u00B0F`;
+    } else {
+      temp = `${tempC.toFixed(1)}\u00B0C`;
+    }
+  }
+  const rain = Number.isFinite(Number(prediction.rainProbability)) ? `${Math.round(Number(prediction.rainProbability) * 100)}%` : "--";
+  const confidence = Number.isFinite(Number(prediction.confidence)) ? `${Math.round(Number(prediction.confidence) * 100)}%` : "--";
+  const humidityTrend = prediction.humidityTrend || "--";
+
+  el.mlPredictionList.innerHTML = [
+    `<div class="list-item"><strong>Temperature Tomorrow</strong><div>${temp}</div></div>`,
+    `<div class="list-item"><strong>Rain Probability</strong><div>${rain}</div></div>`,
+    `<div class="list-item"><strong>Confidence</strong><div>${confidence}</div></div>`,
+    `<div class="list-item"><strong>Humidity Trend</strong><div>${capitalize(String(humidityTrend))}</div></div>`,
+  ].join("");
+}
+
 function renderForecast() {
   const daily = state.forecast?.daily || [];
   if (!daily.length) {
