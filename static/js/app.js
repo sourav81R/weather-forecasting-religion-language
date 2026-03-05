@@ -1331,6 +1331,129 @@ function previewSkyImage() {
   reader.readAsDataURL(file);
 }
 
+function clamp01(value) {
+  return Math.max(0, Math.min(1, Number(value) || 0));
+}
+
+async function imageStatsFromFile(file) {
+  const size = 224;
+  let bitmap;
+  try {
+    bitmap = await createImageBitmap(file);
+  } catch {
+    throw new Error("Invalid image. Please upload a valid sky photo.");
+  }
+
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) throw new Error("Image processing is unavailable in this browser.");
+
+  ctx.drawImage(bitmap, 0, 0, size, size);
+  if (typeof bitmap.close === "function") bitmap.close();
+  const pixels = ctx.getImageData(0, 0, size, size).data;
+  if (!pixels || !pixels.length) throw new Error("Unable to process uploaded image.");
+
+  let sumBrightness = 0;
+  let sumBrightnessSq = 0;
+  let sumSaturation = 0;
+  let sumBlueRatio = 0;
+  let darkCount = 0;
+  let grayCount = 0;
+  const count = pixels.length / 4;
+
+  for (let i = 0; i < pixels.length; i += 4) {
+    const r = pixels[i];
+    const g = pixels[i + 1];
+    const b = pixels[i + 2];
+
+    const brightness = (r + g + b) / 3;
+    sumBrightness += brightness;
+    sumBrightnessSq += brightness * brightness;
+    if (brightness < 85) darkCount += 1;
+
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    const saturation = max === 0 ? 0 : (max - min) / max;
+    sumSaturation += saturation;
+    if (saturation < 0.18) grayCount += 1;
+
+    sumBlueRatio += b / Math.max(r + g + b, 1);
+  }
+
+  const meanBrightness = sumBrightness / count;
+  const variance = Math.max(0, sumBrightnessSq / count - meanBrightness * meanBrightness);
+  const stdBrightness = Math.sqrt(variance);
+  const meanSaturation = sumSaturation / count;
+  const meanBlueRatio = sumBlueRatio / count;
+  const darkFraction = darkCount / count;
+  const grayFraction = grayCount / count;
+
+  return {
+    meanBrightness,
+    stdBrightness,
+    meanSaturation,
+    meanBlueRatio,
+    darkFraction,
+    grayFraction,
+  };
+}
+
+async function staticSkyAnalysis(file) {
+  const stats = await imageStatsFromFile(file);
+  const bNorm = clamp01(stats.meanBrightness / 255);
+  const stdNorm = clamp01(stats.stdBrightness / 128);
+  const sat = clamp01(stats.meanSaturation);
+  const blue = clamp01(stats.meanBlueRatio);
+  const dark = clamp01(stats.darkFraction);
+  const gray = clamp01(stats.grayFraction);
+
+  const labels = ["clear_sky", "rain_clouds", "storm_clouds", "overcast"];
+  const scoreByClass = [
+    0.45 * bNorm + 0.35 * sat + 0.35 * blue - 0.4 * dark,
+    0.45 * gray + 0.3 * dark + 0.2 * (1 - blue) + 0.15 * stdNorm,
+    0.55 * dark + 0.25 * stdNorm + 0.2 * gray - 0.15 * bNorm,
+    0.5 * gray + 0.25 * dark + 0.2 * (1 - sat) + 0.1 * (1 - blue),
+  ];
+
+  const expScores = scoreByClass.map((score) => Math.exp(score * 3));
+  const expTotal = expScores.reduce((sum, value) => sum + value, 0) || 1;
+  const probs = expScores.map((value) => value / expTotal);
+
+  const topIndex = probs.reduce((best, value, idx, arr) => (value > arr[best] ? idx : best), 0);
+  const sorted = [...probs].sort((a, b) => b - a);
+  const confidence = clamp01(sorted[0]);
+
+  let rainProbability = clamp01(probs[1] + 0.9 * probs[2] + 0.5 * probs[3]);
+  const stormRisk = clamp01(probs[2] + 0.3 * probs[1]);
+  const cloudDensity = clamp01((0.95 * probs[2]) + (0.75 * probs[1]) + (0.9 * probs[3]) + (0.15 * probs[0]) + (0.1 * dark));
+
+  const tomorrow = (state.forecast?.daily || [])[1] || (state.forecast?.daily || [])[0];
+  if (tomorrow && Number.isFinite(Number(tomorrow.rainProbability))) {
+    const forecastRain = clamp01(Number(tomorrow.rainProbability) / 100);
+    rainProbability = clamp01((0.7 * rainProbability) + (0.3 * forecastRain));
+    return {
+      sky_condition: labels[topIndex],
+      rain_probability: Number(rainProbability.toFixed(2)),
+      storm_risk: Number(stormRisk.toFixed(2)),
+      cloud_density: Number(cloudDensity.toFixed(2)),
+      confidence: Number(confidence.toFixed(2)),
+      forecast_rain_probability: Number(forecastRain.toFixed(2)),
+      analysis_mode: "static_heuristic",
+    };
+  }
+
+  return {
+    sky_condition: labels[topIndex],
+    rain_probability: Number(rainProbability.toFixed(2)),
+    storm_risk: Number(stormRisk.toFixed(2)),
+    cloud_density: Number(cloudDensity.toFixed(2)),
+    confidence: Number(confidence.toFixed(2)),
+    analysis_mode: "static_heuristic",
+  };
+}
+
 function renderSkyAnalysis(result) {
   if (!el.skyAnalysisResult) return;
   if (!result) {
@@ -1346,9 +1469,13 @@ function renderSkyAnalysis(result) {
     Number.isFinite(Number(result.forecast_rain_probability))
       ? `${Math.round(Number(result.forecast_rain_probability) * 100)}%`
       : null;
+  const mode = result.analysis_mode ? String(result.analysis_mode).replaceAll("_", " ") : null;
 
   const extra = forecastRain
     ? `<div class="list-item"><strong>Forecast Rain (Blend Input)</strong><div>${forecastRain}</div></div>`
+    : "";
+  const modeItem = mode
+    ? `<div class="list-item"><strong>Analysis Mode</strong><div>${escapeHtml(capitalize(mode))}</div></div>`
     : "";
 
   el.skyAnalysisResult.innerHTML = [
@@ -1357,6 +1484,7 @@ function renderSkyAnalysis(result) {
     `<div class="list-item"><strong>Storm Risk</strong><div>${storm}</div></div>`,
     `<div class="list-item"><strong>Cloud Density</strong><div>${cloudDensity}</div></div>`,
     `<div class="list-item"><strong>Confidence</strong><div>${confidence}</div></div>`,
+    modeItem,
     extra,
   ]
     .filter(Boolean)
@@ -1371,7 +1499,15 @@ async function analyzeSkyImage() {
     return;
   }
   if (state.staticMode) {
-    setStatus("Sky image detection requires backend mode (run Flask app).", "error");
+    try {
+      const result = await staticSkyAnalysis(file);
+      state.skyAnalysis = result;
+      renderSkyAnalysis(result);
+      setStatus("Sky image analyzed in static mode.", "success");
+    } catch (error) {
+      renderSkyAnalysis(null);
+      setStatus(error.message, "error");
+    }
     return;
   }
 
