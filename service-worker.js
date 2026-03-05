@@ -1,4 +1,4 @@
-const CACHE_NAME = "weather-studio-pwa-v2";
+const CACHE_NAME = "weather-studio-pwa-v4";
 const OFFLINE_ASSETS = [
   "/",
   "/css/app.css",
