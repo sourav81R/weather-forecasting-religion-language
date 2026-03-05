@@ -1,7 +1,9 @@
 const CACHE_KEY = "weather-studio-cache-v2";
-const PWA_CACHE_NAME = "weather-studio-pwa-v11";
+const PWA_CACHE_NAME = "weather-studio-pwa-v12";
 const FAVORITES_KEY = "weather-studio-favorites-v2";
 const LAST_COORDS_KEY = "weather-studio-last-coords-v2";
+const LUNAR_CYCLE_DAYS = 29.53058867;
+const REFERENCE_NEW_MOON_UTC_MS = Date.UTC(2000, 0, 6, 18, 14, 0);
 const QUICK_CITIES = ["Kolkata", "Delhi", "Mumbai", "Chennai", "Dhaka", "Bengaluru"];
 const OPENWEATHER_ENDPOINT = "https://api.openweathermap.org/data/2.5/weather";
 const OPENMETEO_ENDPOINT = "https://api.open-meteo.com/v1/forecast";
@@ -533,6 +535,37 @@ function inferIsDay(c) {
   return nowMinutes >= sunriseMinutes && nowMinutes < sunsetMinutes;
 }
 
+function localNoonUtcMs(timezoneOffsetSeconds) {
+  if (!Number.isFinite(Number(timezoneOffsetSeconds))) return Date.now();
+  const offset = Number(timezoneOffsetSeconds);
+  const shiftedNow = new Date(Date.now() + offset * 1000);
+  const y = shiftedNow.getUTCFullYear();
+  const m = shiftedNow.getUTCMonth();
+  const d = shiftedNow.getUTCDate();
+  return Date.UTC(y, m, d, 12, 0, 0) - offset * 1000;
+}
+
+function lunarPhaseFraction(atUtcMs) {
+  const cycleAgeDays = (atUtcMs - REFERENCE_NEW_MOON_UTC_MS) / 86400000;
+  const phase = ((cycleAgeDays / LUNAR_CYCLE_DAYS) % 1 + 1) % 1;
+  return phase;
+}
+
+function resolveNightMoonSymbol(c) {
+  const phase = lunarPhaseFraction(localNoonUtcMs(c?.timezoneOffsetSeconds));
+
+  // Per request: show half-moon on new-moon day.
+  if (phase < 0.035 || phase > 0.965) return "\uD83C\uDF13";
+  if (Math.abs(phase - 0.5) <= 0.035) return "\uD83C\uDF15";
+  if (phase < 0.125) return "\uD83C\uDF12";
+  if (phase < 0.25) return "\uD83C\uDF13";
+  if (phase < 0.375) return "\uD83C\uDF14";
+  if (phase < 0.625) return "\uD83C\uDF15";
+  if (phase < 0.75) return "\uD83C\uDF16";
+  if (phase < 0.875) return "\uD83C\uDF17";
+  return "\uD83C\uDF18";
+}
+
 function resolveConditionSymbol(c) {
   const condition = String(c?.condition || "").trim();
   const description = String(c?.description || "").toLowerCase();
@@ -552,10 +585,10 @@ function resolveConditionSymbol(c) {
     return isDay === false ? "\u2601" : "\u26C5";
   }
   if (condition === "Clear" || description.includes("clear") || description.includes("sun")) {
-    return isDay === false ? "\uD83C\uDF19" : "\uD83C\uDF1E";
+    return isDay === false ? resolveNightMoonSymbol(c) : "\uD83C\uDF1E";
   }
 
-  if (isDay === false) return "\uD83C\uDF19";
+  if (isDay === false) return resolveNightMoonSymbol(c);
   if (isDay === true) return "\u2600";
   return c?.symbol || "\u2601";
 }
