@@ -1,5 +1,5 @@
 const CACHE_KEY = "weather-studio-cache-v2";
-const PWA_CACHE_NAME = "weather-studio-pwa-v12";
+const PWA_CACHE_NAME = "weather-studio-pwa-v19";
 const FAVORITES_KEY = "weather-studio-favorites-v2";
 const LAST_COORDS_KEY = "weather-studio-last-coords-v2";
 const LUNAR_CYCLE_DAYS = 29.53058867;
@@ -68,6 +68,13 @@ const WMO_TO_CONDITION = {
   95: "Thunderstorm",
   96: "Thunderstorm",
   99: "Thunderstorm",
+};
+const CROP_PROFILES = {
+  rice: { tempMin: 20, tempMax: 35, weeklyRainMm: 35 },
+  wheat: { tempMin: 12, tempMax: 25, weeklyRainMm: 20 },
+  maize: { tempMin: 18, tempMax: 32, weeklyRainMm: 28 },
+  potato: { tempMin: 10, tempMax: 24, weeklyRainMm: 18 },
+  cotton: { tempMin: 21, tempMax: 34, weeklyRainMm: 22 },
 };
 
 const el = {
@@ -551,12 +558,7 @@ function lunarPhaseFraction(atUtcMs) {
   return phase;
 }
 
-function resolveNightMoonSymbol(c) {
-  const phase = lunarPhaseFraction(localNoonUtcMs(c?.timezoneOffsetSeconds));
-
-  // Per request: show half-moon on new-moon day.
-  if (phase < 0.035 || phase > 0.965) return "\uD83C\uDF13";
-  if (Math.abs(phase - 0.5) <= 0.035) return "\uD83C\uDF15";
+function moonEmojiFromPhase(phase) {
   if (phase < 0.125) return "\uD83C\uDF12";
   if (phase < 0.25) return "\uD83C\uDF13";
   if (phase < 0.375) return "\uD83C\uDF14";
@@ -566,31 +568,47 @@ function resolveNightMoonSymbol(c) {
   return "\uD83C\uDF18";
 }
 
-function resolveConditionSymbol(c) {
+function resolveNightMoonVisual(c) {
+  // Fixed half-moon visual per request.
+  const phase = 0.25;
+  const illumination = (1 - Math.cos(2 * Math.PI * phase)) / 2;
+  const shadowWidth = Math.max(10, Math.min(90, Math.pow(1 - illumination, 0.88) * 90));
+  const shadowOffset = (phase < 0.5 ? -1 : 1) * (8 + Math.abs(phase - 0.5) * 8);
+
+  return {
+    symbol: "\uD83C\uDF13",
+    phase,
+    illumination,
+    shadowWidth,
+    shadowOffset,
+  };
+}
+
+function resolveConditionVisual(c) {
   const condition = String(c?.condition || "").trim();
   const description = String(c?.description || "").toLowerCase();
   const clouds = Number(c?.clouds);
   const isDay = inferIsDay(c);
 
-  if (condition === "Thunderstorm" || description.includes("thunder")) return "\u26C8";
-  if (condition === "Snow" || description.includes("snow")) return "\uD83C\uDF28";
+  if (condition === "Thunderstorm" || description.includes("thunder")) return { symbol: "\u26C8" };
+  if (condition === "Snow" || description.includes("snow")) return { symbol: "\uD83C\uDF28" };
   if (condition === "Mist" || condition === "Fog" || description.includes("mist") || description.includes("fog") || description.includes("haze")) {
-    return "\uD83C\uDF2B";
+    return { symbol: "\uD83C\uDF2B" };
   }
   if (condition === "Rain" || condition === "Drizzle" || description.includes("rain") || description.includes("drizzle") || description.includes("shower")) {
-    if (Number.isFinite(clouds) && clouds >= 70) return "\uD83C\uDF27";
-    return isDay === false ? "\u2601" : "\uD83C\uDF26";
+    if (Number.isFinite(clouds) && clouds >= 70) return { symbol: "\uD83C\uDF27" };
+    return { symbol: isDay === false ? "\u2601" : "\uD83C\uDF26" };
   }
   if (condition === "Clouds" || description.includes("cloud")) {
-    return isDay === false ? "\u2601" : "\u26C5";
+    return { symbol: isDay === false ? "\u2601" : "\u26C5" };
   }
   if (condition === "Clear" || description.includes("clear") || description.includes("sun")) {
-    return isDay === false ? resolveNightMoonSymbol(c) : "\uD83C\uDF1E";
+    return isDay === false ? { ...resolveNightMoonVisual(c), moon: true, moonImage: true } : { symbol: "\uD83C\uDF1E" };
   }
 
-  if (isDay === false) return resolveNightMoonSymbol(c);
-  if (isDay === true) return "\u2600";
-  return c?.symbol || "\u2601";
+  if (isDay === false) return { ...resolveNightMoonVisual(c), moon: true };
+  if (isDay === true) return { symbol: "\u2600" };
+  return { symbol: c?.symbol || "\u2601" };
 }
 
 function i18nLanguageCode(languageName) {
@@ -797,7 +815,26 @@ function applyBundle(bundle) {
 function renderCurrent() {
   if (!state.current) return;
   const c = state.current;
-  el.conditionSymbol.textContent = resolveConditionSymbol(c);
+  const visual = resolveConditionVisual(c);
+  const usesMoonImage = Boolean(visual.moonImage);
+  el.conditionSymbol.textContent = usesMoonImage ? "" : visual.symbol || "\u2601";
+  el.conditionSymbol.classList.toggle("is-moon-image", usesMoonImage);
+  const isRealMoon = Boolean(visual.moon) && !usesMoonImage;
+  el.conditionSymbol.classList.toggle("is-real-moon", isRealMoon);
+  if (isRealMoon) {
+    el.conditionSymbol.style.setProperty("--moon-shadow-width", `${Number(visual.shadowWidth || 48).toFixed(1)}%`);
+    el.conditionSymbol.style.setProperty("--moon-shadow-offset", `${Number(visual.shadowOffset || 0).toFixed(1)}%`);
+    const illumination = Number(visual.illumination || 0.5);
+    el.conditionSymbol.style.setProperty("--moon-shadow-opacity", `${Math.max(0.08, Math.min(0.46, (1 - illumination) * 0.52 + 0.03)).toFixed(2)}`);
+    el.conditionSymbol.style.setProperty("--moon-glow-opacity", `${Math.max(0.16, Math.min(0.42, 0.2 + illumination * 0.3)).toFixed(2)}`);
+    el.conditionSymbol.style.setProperty("--moon-core-brightness", `${Math.max(0.96, Math.min(1.16, 0.96 + illumination * 0.16)).toFixed(2)}`);
+  } else {
+    el.conditionSymbol.style.removeProperty("--moon-shadow-width");
+    el.conditionSymbol.style.removeProperty("--moon-shadow-offset");
+    el.conditionSymbol.style.removeProperty("--moon-shadow-opacity");
+    el.conditionSymbol.style.removeProperty("--moon-glow-opacity");
+    el.conditionSymbol.style.removeProperty("--moon-core-brightness");
+  }
   el.temperatureText.textContent = `${c.temperature ?? "--"} ${c.temperatureUnit || ""}`.trim();
   const baseDescription = c.description || "--";
   el.descriptionText.textContent = baseDescription;
@@ -857,20 +894,42 @@ function renderForecast() {
   const pUnit = state.forecast?.units?.precipitation || "mm";
 
   el.forecastCards.innerHTML = daily
-    .map((day) => {
+    .map((day, index) => {
       const d = new Date(day.date);
       const label = Number.isNaN(d.getTime())
         ? day.date
         : d.toLocaleDateString(undefined, { weekday: "short", day: "2-digit", month: "short" });
-      return `<div class="forecast-card">
-        <strong>${label}</strong>
-        <div>${day.condition}</div>
-        <div>${Math.round(day.maxTemp)}${tUnit} / ${Math.round(day.minTemp)}${tUnit}</div>
-        <div>Rain: ${Math.round(day.rainProbability)}%</div>
-        <div>Wind: ${Math.round(day.windSpeed)} ${wUnit}</div>
-        <div>UV: ${Number(day.uvIndex).toFixed(1)}</div>
-        <div>Precip: ${Number(day.rainAmount).toFixed(1)} ${pUnit}</div>
-      </div>`;
+      const condition = String(day.condition || "Clouds");
+      const conditionKey = condition.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+      const symbol = WEATHER_SYMBOLS[condition] || "\uD83C\uDF24";
+      const maxTemp = Number.isFinite(Number(day.maxTemp)) ? Math.round(Number(day.maxTemp)) : "--";
+      const minTemp = Number.isFinite(Number(day.minTemp)) ? Math.round(Number(day.minTemp)) : "--";
+      const rain = Number.isFinite(Number(day.rainProbability)) ? Math.round(Number(day.rainProbability)) : "--";
+      const wind = Number.isFinite(Number(day.windSpeed)) ? Math.round(Number(day.windSpeed)) : "--";
+      const uv = Number.isFinite(Number(day.uvIndex)) ? Number(day.uvIndex).toFixed(1) : "--";
+      const precip = Number.isFinite(Number(day.rainAmount)) ? Number(day.rainAmount).toFixed(1) : "--";
+      const rainText = rain === "--" ? "--" : `${rain}%`;
+      const windText = wind === "--" ? "--" : `${wind} ${wUnit}`;
+      const precipText = precip === "--" ? "--" : `${precip} ${pUnit}`;
+      const lowText = minTemp === "--" ? "--" : `${minTemp}${tUnit}`;
+      const highText = maxTemp === "--" ? "--" : `${maxTemp}${tUnit}`;
+
+      return `<article class="forecast-card" data-condition="${escapeHtml(conditionKey)}" style="--forecast-order:${index};">
+        <div class="forecast-card-head">
+          <p class="forecast-day">${escapeHtml(label)}</p>
+          <p class="forecast-condition-chip"><span>${symbol}</span>${escapeHtml(condition)}</p>
+        </div>
+        <div class="forecast-temp-band">
+          <strong>${highText}</strong>
+          <span>Low ${lowText}</span>
+        </div>
+        <div class="forecast-meta-grid">
+          <div class="forecast-meta"><span>Rain</span><strong>${rainText}</strong></div>
+          <div class="forecast-meta"><span>Wind</span><strong>${windText}</strong></div>
+          <div class="forecast-meta"><span>UV</span><strong>${uv}</strong></div>
+          <div class="forecast-meta"><span>Precip</span><strong>${precipText}</strong></div>
+        </div>
+      </article>`;
     })
     .join("");
 
@@ -1073,27 +1132,41 @@ async function handleTravelPlanner() {
     setStatus("Travel planner needs destination and dates.", "error");
     return;
   }
+  if (endDate < startDate) {
+    el.travelResult.innerHTML = `<div class="list-item">End date must be on or after start date.</div>`;
+    return;
+  }
 
   try {
     if (state.staticMode) {
-      const start = new Date(startDate);
-      const end = new Date(endDate);
-      const daily = (state.forecast?.daily || []).filter((d) => {
-        const cur = new Date(d.date);
-        return cur >= start && cur <= end;
+      const units = el.unitsSelect.value === "imperial" ? "imperial" : "metric";
+      const geo = await staticGeocodeCity(destination);
+      const forecast = await staticFetchForecast(geo.latitude, geo.longitude, units);
+      const tUnit = forecast?.units?.temperature === "F" ? "\u00B0F" : "\u00B0C";
+      const daily = (forecast.daily || []).filter((d) => {
+        const date = String(d.date || "").slice(0, 10);
+        return date >= startDate && date <= endDate;
       });
       if (!daily.length) throw new Error("Date range is outside available forecast.");
       const scored = daily.map((d) => {
         const avg = (Number(d.maxTemp) + Number(d.minTemp)) / 2;
-        const score = Math.max(0, 100 - Math.abs(avg - 24) * 2 - Number(d.rainProbability) * 0.5 - Math.max(0, Number(d.windSpeed) - 25) * 1.1);
-        return { ...d, score: Number(score.toFixed(1)) };
+        const score =
+          100 -
+          Math.abs(avg - 24) * 2.3 -
+          Math.max(0, Number(d.rainProbability) - 20) * 0.6 -
+          Math.max(0, Number(d.windSpeed) - 24) * 0.9 -
+          Math.max(0, Number(d.uvIndex) - 6) * 2.5;
+        return { ...d, score: Number(Math.max(0, score).toFixed(1)) };
       });
       scored.sort((a, b) => b.score - a.score);
       const best = scored.slice(0, 3)
-        .map((d) => `<div class="list-item"><strong>${d.date}</strong> <span class="muted">Score ${d.score}</span><div>Rain ${d.rainProbability}% | Temp ${d.minTemp} to ${d.maxTemp}</div></div>`)
+        .map(
+          (d) =>
+            `<div class="list-item"><strong>${escapeHtml(d.date)}</strong> <span class="muted">Score ${d.score}</span><div>${escapeHtml(d.condition || "Clouds")} | Rain ${Math.round(Number(d.rainProbability) || 0)}% | Temp ${Math.round(Number(d.minTemp) || 0)}${tUnit} to ${Math.round(Number(d.maxTemp) || 0)}${tUnit}</div></div>`,
+        )
         .join("");
       const overall = Number((scored.reduce((a, b) => a + b.score, 0) / scored.length).toFixed(1));
-      el.travelResult.innerHTML = `<div class="list-item"><strong>Overall score</strong><div>${overall}/100</div><div>Static-mode local estimate for selected dates.</div></div>${best}`;
+      el.travelResult.innerHTML = `<div class="list-item"><strong>${escapeHtml(destination)}</strong><div>Overall score: ${overall}/100</div><div>Static-mode estimate for ${escapeHtml(startDate)} to ${escapeHtml(endDate)}.</div></div>${best}`;
       return;
     }
 
@@ -1101,10 +1174,14 @@ async function handleTravelPlanner() {
       method: "POST",
       body: JSON.stringify({ destination, startDate, endDate, units: el.unitsSelect.value }),
     });
+    const tUnit = el.unitsSelect.value === "imperial" ? "\u00B0F" : "\u00B0C";
     const days = (result.bestTravelDays || [])
-      .map((d) => `<div class="list-item"><strong>${d.date}</strong> <span class="muted">Score ${d.score}</span><div>Rain ${d.rainRisk}% | Temp ${d.tempRange[0]} to ${d.tempRange[1]}</div></div>`)
+      .map(
+        (d) =>
+          `<div class="list-item"><strong>${escapeHtml(d.date)}</strong> <span class="muted">Score ${d.score}</span><div>${escapeHtml(d.condition || "Clouds")} | Rain ${d.rainRisk}% | Temp ${d.tempRange[0]}${tUnit} to ${d.tempRange[1]}${tUnit}</div></div>`,
+      )
       .join("");
-    el.travelResult.innerHTML = `<div class="list-item"><strong>Overall score</strong><div>${result.weatherScore}/100</div><div>${result.recommendation}</div></div>${days}`;
+    el.travelResult.innerHTML = `<div class="list-item"><strong>${escapeHtml(result.destination || destination)}</strong><div>Overall score: ${result.weatherScore}/100</div><div>${escapeHtml(result.recommendation || "")}</div></div>${days}`;
   } catch (error) {
     el.travelResult.innerHTML = `<div class="list-item">${error.message}</div>`;
   }
@@ -1112,17 +1189,44 @@ async function handleTravelPlanner() {
 
 async function handleAgricultureAdvisor() {
   try {
+    const cropKey = String(el.cropType.value || "rice").toLowerCase();
+    const profile = CROP_PROFILES[cropKey] || CROP_PROFILES.rice;
     if (state.staticMode) {
       const daily = (state.forecast?.daily || []).slice(0, 7);
       if (!daily.length) throw new Error("Forecast unavailable.");
+      const avgTemp = daily.reduce((sum, d) => sum + (Number(d.maxTemp) + Number(d.minTemp)) / 2, 0) / daily.length;
       const rain = daily.reduce((sum, d) => sum + Number(d.rainAmount || 0), 0);
       const minTemp = Math.min(...daily.map((d) => Number(d.minTemp || 0)));
       const maxRainProb = Math.max(...daily.map((d) => Number(d.rainProbability || 0)));
+      const plantingDays = daily
+        .filter((d) => {
+          const avg = (Number(d.maxTemp) + Number(d.minTemp)) / 2;
+          return avg >= profile.tempMin && avg <= profile.tempMax && Number(d.rainProbability || 0) < 65;
+        })
+        .slice(0, 3)
+        .map((d) => String(d.date));
+      const plantingWindow = plantingDays.length
+        ? `Suitable planting days: ${plantingDays.join(", ")}.`
+        : "No strong planting window in the next 7 days.";
+      const irrigation =
+        rain >= profile.weeklyRainMm
+          ? "Natural rainfall likely sufficient; reduce supplemental irrigation."
+          : `Plan supplemental irrigation of approximately ${(profile.weeklyRainMm - rain).toFixed(1)} mm this week.`;
+      const advice = [];
+      if (avgTemp < profile.tempMin) advice.push("Average temperature is below crop comfort range; growth may slow.");
+      else if (avgTemp > profile.tempMax) advice.push("Average temperature is above ideal range; monitor crop stress and soil moisture.");
+      else advice.push("Temperature profile is within the crop comfort range.");
+      advice.push(maxRainProb >= 70 ? "High rain probability detected; prepare drainage and disease protection." : "No severe rain spikes expected this week.");
+      if (minTemp <= 2) advice.push("Frost risk is present; use crop covers during night hours.");
+      if (rain < profile.weeklyRainMm) advice.push("Rainfall may be insufficient; schedule irrigation cycles.");
+      const adviceHtml = advice.map((item) => `<div class="list-item">${escapeHtml(item)}</div>`).join("");
       el.agriResult.innerHTML = `
-        <div class="list-item"><strong>Irrigation</strong><div>${rain > 25 ? "Rain is likely sufficient; reduce manual irrigation." : "Plan supplemental irrigation this week."}</div></div>
-        <div class="list-item"><strong>Planting Window</strong><div>${maxRainProb < 65 ? "Next 3 days are suitable for planting." : "Delay planting until rain risk drops."}</div></div>
+        <div class="list-item"><strong>Crop</strong><div>${escapeHtml(capitalize(cropKey))} (ideal ${profile.tempMin} to ${profile.tempMax}\u00B0C, weekly rain target ${profile.weeklyRainMm} mm)</div></div>
+        <div class="list-item"><strong>Irrigation</strong><div>${escapeHtml(irrigation)}</div></div>
+        <div class="list-item"><strong>Planting Window</strong><div>${escapeHtml(plantingWindow)}</div></div>
         <div class="list-item"><strong>Rain Alert</strong><div>${maxRainProb >= 70 ? "High" : "Normal"}</div></div>
-        <div class="list-item"><strong>Frost Risk</strong><div>${minTemp <= 2 ? "Present" : "Low"}</div></div>`;
+        <div class="list-item"><strong>Frost Risk</strong><div>${minTemp <= 2 ? "Present" : "Low"}</div></div>
+        ${adviceHtml}`;
       return;
     }
 
@@ -1131,7 +1235,10 @@ async function handleAgricultureAdvisor() {
       body: JSON.stringify({ ...currentPayload(), ...locationPayload(), cropType: el.cropType.value }),
     });
     const advice = (result.advice || []).map((item) => `<div class="list-item">${item}</div>`).join("");
+    const cropName = capitalize(String(result.cropType || cropKey).toLowerCase());
+    const profileText = `ideal ${profile.tempMin} to ${profile.tempMax}\u00B0C, weekly rain target ${profile.weeklyRainMm} mm`;
     el.agriResult.innerHTML = `
+      <div class="list-item"><strong>Crop</strong><div>${escapeHtml(cropName)} (${profileText})</div></div>
       <div class="list-item"><strong>Irrigation</strong><div>${result.irrigationRecommendation}</div></div>
       <div class="list-item"><strong>Planting Window</strong><div>${result.plantingWindow}</div></div>
       <div class="list-item"><strong>Rain Alert</strong><div>${result.rainAlert ? "High" : "Normal"}</div></div>
@@ -1150,32 +1257,114 @@ function appendChat(text, role) {
   el.chatLog.scrollTop = el.chatLog.scrollHeight;
 }
 
+function chatHas(text, words) {
+  return words.some((word) => text.includes(word));
+}
+
+function chatNum(value, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function chatResolveDay(text, daily) {
+  if (!daily.length) return null;
+  if (text.includes("today")) return daily[0];
+  if (text.includes("tomorrow")) return daily[1] || null;
+  const match = text.match(/\bin\s+(\d{1,2})\s+day/);
+  if (match) {
+    const idx = Number(match[1]);
+    if (Number.isFinite(idx) && idx >= 0 && idx < daily.length) return daily[idx];
+  }
+  return null;
+}
+
+function chatFormatDayLabel(day) {
+  const raw = String(day?.date || "").trim();
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return raw || "selected day";
+  return parsed.toLocaleDateString(undefined, { weekday: "short", day: "2-digit", month: "short" });
+}
+
+function answerStaticWeatherQuestion(question) {
+  const current = state.current || {};
+  const daily = state.forecast?.daily || [];
+  const hourly = state.forecast?.hourly || [];
+  const text = String(question || "").toLowerCase().trim();
+
+  if (!daily.length) return "Load weather first, then ask about rain, temperature, humidity, wind, UV, sunrise/sunset, or weekend forecast.";
+
+  const selectedDay = chatResolveDay(text, daily);
+  const selectedLabel = selectedDay ? chatFormatDayLabel(selectedDay) : "today";
+
+  if (chatHas(text, ["sunrise", "sunset", "daylight"])) {
+    return `Sunrise is around ${current.sunrise || "--"} and sunset is around ${current.sunset || "--"}.`;
+  }
+  if (chatHas(text, ["humidity", "humid"])) {
+    return `Current humidity is around ${Math.round(chatNum(current.humidity))}%.`;
+  }
+  if (chatHas(text, ["wind", "breeze", "gust"])) {
+    return `Current wind is about ${chatNum(current.windSpeed).toFixed(1)} ${current.windUnit || "m/s"}.`;
+  }
+  if (chatHas(text, ["uv", "sunburn", "sunscreen"])) {
+    const uv = chatNum((selectedDay || daily[0]).uvIndex);
+    const level = uv >= 8 ? "very high" : uv >= 6 ? "high" : uv >= 3 ? "moderate" : "low";
+    return `${selectedLabel} UV index is around ${uv.toFixed(1)} (${level}).`;
+  }
+  if (chatHas(text, ["rain", "umbrella", "precip", "drizzle", "shower"])) {
+    const day = selectedDay || daily[0];
+    const rain = chatNum(day.rainProbability);
+    const amount = chatNum(day.rainAmount);
+    return `${selectedLabel} rain chance is ${Math.round(rain)}% with about ${amount.toFixed(1)} ${(state.forecast?.units?.precipitation || "mm")}. ${rain >= 45 ? "Carry an umbrella." : "Umbrella is usually optional."}`;
+  }
+  if (chatHas(text, ["temperature", "temp", "hot", "cold", "heat", "feels like"])) {
+    if (selectedDay) {
+      return `${selectedLabel} temperature is expected around ${Math.round(chatNum(selectedDay.minTemp))} to ${Math.round(chatNum(selectedDay.maxTemp))}${state.current?.temperatureUnit || "°C"}.`;
+    }
+    return `Current temperature is ${Math.round(chatNum(current.temperature))}${current.temperatureUnit || "°C"} and feels like ${Math.round(chatNum(current.feelsLike))}${current.temperatureUnit || "°C"}.`;
+  }
+  if (chatHas(text, ["hottest", "warmest", "coldest", "coolest"])) {
+    if (text.includes("cold") || text.includes("cool")) {
+      const coldest = daily.reduce((best, item) => (chatNum(item.minTemp, 999) < chatNum(best.minTemp, 999) ? item : best), daily[0]);
+      return `Coldest forecast day is ${chatFormatDayLabel(coldest)} at about ${Math.round(chatNum(coldest.minTemp))}${state.current?.temperatureUnit || "°C"}.`;
+    }
+    const hottest = daily.reduce((best, item) => (chatNum(item.maxTemp, -999) > chatNum(best.maxTemp, -999) ? item : best), daily[0]);
+    return `Hottest forecast day is ${chatFormatDayLabel(hottest)} at about ${Math.round(chatNum(hottest.maxTemp))}${state.current?.temperatureUnit || "°C"}.`;
+  }
+  if (chatHas(text, ["weekend"])) {
+    const weekend = daily.filter((item) => {
+      const d = new Date(item.date);
+      return !Number.isNaN(d.getTime()) && (d.getDay() === 0 || d.getDay() === 6);
+    });
+    if (!weekend.length) return "Weekend forecast is outside the current 15-day range.";
+    const highs = weekend.map((item) => chatNum(item.maxTemp));
+    const lows = weekend.map((item) => chatNum(item.minTemp));
+    const rain = Math.max(...weekend.map((item) => chatNum(item.rainProbability)), 0);
+    return `Weekend temperatures are around ${Math.round(Math.min(...lows))}-${Math.round(Math.max(...highs))}${state.current?.temperatureUnit || "°C"} with peak rain chance near ${Math.round(rain)}%.`;
+  }
+  if (chatHas(text, ["outdoor", "activity", "best time", "walk", "run", "jog", "picnic"])) {
+    const windowText = computeOutdoorWindow();
+    const best = state.activity?.bestActivity;
+    if (best) return `${windowText} Recommended activity now: ${best.activity} (${best.score}/100).`;
+    return windowText;
+  }
+  if (chatHas(text, ["forecast", "next", "upcoming", "weather"])) {
+    const today = daily[0];
+    const tomorrow = daily[1];
+    const line1 = `Today: ${String(today.condition || "mixed").toLowerCase()}, rain chance ${Math.round(chatNum(today.rainProbability))}%.`;
+    if (!tomorrow) return line1;
+    const line2 = `Tomorrow: ${String(tomorrow.condition || "mixed").toLowerCase()}, ${Math.round(chatNum(tomorrow.minTemp))}-${Math.round(chatNum(tomorrow.maxTemp))}${state.current?.temperatureUnit || "°C"}.`;
+    return `${line1} ${line2}`;
+  }
+  return staticBuildSummary(current, state.forecast || { daily: [] });
+}
+
 async function askChatbot() {
   const question = el.chatInput.value.trim();
   if (!question) return;
   el.chatInput.value = "";
   appendChat(question, "user");
   if (state.staticMode) {
-    const daily = state.forecast?.daily || [];
-    const q = question.toLowerCase();
-    if (q.includes("rain") && q.includes("tomorrow") && daily[1]) {
-      appendChat(`Tomorrow rain probability is around ${Math.round(daily[1].rainProbability)}%.`, "bot");
-      return;
-    }
-    if ((q.includes("weekend") || q.includes("this weekend")) && daily.length) {
-      const weekend = daily.filter((d) => {
-        const date = new Date(d.date);
-        return date.getDay() === 0 || date.getDay() === 6;
-      });
-      if (weekend.length) {
-        const highs = weekend.map((d) => Number(d.maxTemp));
-        appendChat(`Weekend highs are expected between ${Math.min(...highs).toFixed(1)} and ${Math.max(...highs).toFixed(1)}.`, "bot");
-      } else {
-        appendChat("Weekend forecast is outside the current 15-day range.", "bot");
-      }
-      return;
-    }
-    appendChat(staticBuildSummary(state.current || {}, state.forecast || { daily: [] }), "bot");
+    appendChat(answerStaticWeatherQuestion(question), "bot");
     return;
   }
 
@@ -1681,6 +1870,16 @@ function capitalize(value) {
   return value ? value.charAt(0).toUpperCase() + value.slice(1) : "";
 }
 
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (char) => {
+    if (char === "&") return "&amp;";
+    if (char === "<") return "&lt;";
+    if (char === ">") return "&gt;";
+    if (char === '"') return "&quot;";
+    return "&#39;";
+  });
+}
+
 async function initialize() {
   try {
     await fetchConfig();
@@ -1709,3 +1908,7 @@ async function initialize() {
 }
 
 void initialize();
+
+
+
+
