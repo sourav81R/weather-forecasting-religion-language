@@ -490,11 +490,64 @@ select:focus,
   font-size: 36px;
   width: 56px;
   height: 56px;
+  position: relative;
+  overflow: hidden;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
   background: color-mix(in srgb, var(--brand-soft) 50%, transparent);
+}
+
+.symbol.is-real-moon {
+  color: transparent;
+  background:
+    radial-gradient(circle at 30% 24%, #fff6c9 0%, #f7dd8e 35%, #dfb960 68%, #b48534 100%);
+  filter: brightness(var(--moon-core-brightness, 1.06)) saturate(1.02);
+  box-shadow:
+    inset -7px -9px 14px rgba(70, 42, 12, 0.28),
+    inset 4px 4px 9px rgba(255, 247, 216, 0.36),
+    0 8px 14px rgba(28, 50, 84, 0.16),
+    0 0 16px rgba(255, 219, 130, var(--moon-glow-opacity, 0.24));
+}
+
+.symbol.is-real-moon::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 66% 31%, rgba(133, 85, 31, 0.3) 0 10%, transparent 12%),
+    radial-gradient(circle at 36% 61%, rgba(148, 94, 34, 0.24) 0 8%, transparent 10%),
+    radial-gradient(circle at 56% 73%, rgba(121, 77, 29, 0.2) 0 7%, transparent 9%),
+    radial-gradient(circle at 42% 38%, rgba(255, 248, 221, 0.16) 0 13%, transparent 15%);
+}
+
+.symbol.is-real-moon::after {
+  content: "";
+  position: absolute;
+  top: -8%;
+  bottom: -8%;
+  left: 50%;
+  width: calc(var(--moon-shadow-width, 48%) + 14%);
+  transform: translateX(calc(-50% + var(--moon-shadow-offset, 0%)));
+  border-radius: 50%;
+  background:
+    radial-gradient(
+      ellipse at 50% 50%,
+      rgba(18, 12, 7, var(--moon-shadow-opacity, 0.5)) 58%,
+      rgba(18, 12, 7, calc(var(--moon-shadow-opacity, 0.5) * 0.22)) 72%,
+      rgba(18, 12, 7, 0) 84%
+    );
+  filter: blur(0.9px);
+}
+
+.symbol.is-moon-image {
+  color: transparent;
+  background: url("/components/moon-night.svg") center / cover no-repeat;
+  box-shadow:
+    0 8px 14px rgba(28, 50, 84, 0.18),
+    0 0 16px rgba(156, 132, 255, 0.28);
 }
 
 .temperature {

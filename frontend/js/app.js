@@ -1,5 +1,5 @@
 const CACHE_KEY = "weather-studio-cache-v2";
-const PWA_CACHE_NAME = "weather-studio-pwa-v13";
+const PWA_CACHE_NAME = "weather-studio-pwa-v19";
 const FAVORITES_KEY = "weather-studio-favorites-v2";
 const LAST_COORDS_KEY = "weather-studio-last-coords-v2";
 const LUNAR_CYCLE_DAYS = 29.53058867;
@@ -551,12 +551,7 @@ function lunarPhaseFraction(atUtcMs) {
   return phase;
 }
 
-function resolveNightMoonSymbol(c) {
-  const phase = lunarPhaseFraction(localNoonUtcMs(c?.timezoneOffsetSeconds));
-
-  // Per request: show half-moon on new-moon day.
-  if (phase < 0.035 || phase > 0.965) return "\uD83C\uDF13";
-  if (Math.abs(phase - 0.5) <= 0.035) return "\uD83C\uDF15";
+function moonEmojiFromPhase(phase) {
   if (phase < 0.125) return "\uD83C\uDF12";
   if (phase < 0.25) return "\uD83C\uDF13";
   if (phase < 0.375) return "\uD83C\uDF14";
@@ -566,31 +561,47 @@ function resolveNightMoonSymbol(c) {
   return "\uD83C\uDF18";
 }
 
-function resolveConditionSymbol(c) {
+function resolveNightMoonVisual(c) {
+  // Fixed half-moon visual per request.
+  const phase = 0.25;
+  const illumination = (1 - Math.cos(2 * Math.PI * phase)) / 2;
+  const shadowWidth = Math.max(10, Math.min(90, Math.pow(1 - illumination, 0.88) * 90));
+  const shadowOffset = (phase < 0.5 ? -1 : 1) * (8 + Math.abs(phase - 0.5) * 8);
+
+  return {
+    symbol: "\uD83C\uDF13",
+    phase,
+    illumination,
+    shadowWidth,
+    shadowOffset,
+  };
+}
+
+function resolveConditionVisual(c) {
   const condition = String(c?.condition || "").trim();
   const description = String(c?.description || "").toLowerCase();
   const clouds = Number(c?.clouds);
   const isDay = inferIsDay(c);
 
-  if (condition === "Thunderstorm" || description.includes("thunder")) return "\u26C8";
-  if (condition === "Snow" || description.includes("snow")) return "\uD83C\uDF28";
+  if (condition === "Thunderstorm" || description.includes("thunder")) return { symbol: "\u26C8" };
+  if (condition === "Snow" || description.includes("snow")) return { symbol: "\uD83C\uDF28" };
   if (condition === "Mist" || condition === "Fog" || description.includes("mist") || description.includes("fog") || description.includes("haze")) {
-    return "\uD83C\uDF2B";
+    return { symbol: "\uD83C\uDF2B" };
   }
   if (condition === "Rain" || condition === "Drizzle" || description.includes("rain") || description.includes("drizzle") || description.includes("shower")) {
-    if (Number.isFinite(clouds) && clouds >= 70) return "\uD83C\uDF27";
-    return isDay === false ? "\u2601" : "\uD83C\uDF26";
+    if (Number.isFinite(clouds) && clouds >= 70) return { symbol: "\uD83C\uDF27" };
+    return { symbol: isDay === false ? "\u2601" : "\uD83C\uDF26" };
   }
   if (condition === "Clouds" || description.includes("cloud")) {
-    return isDay === false ? "\u2601" : "\u26C5";
+    return { symbol: isDay === false ? "\u2601" : "\u26C5" };
   }
   if (condition === "Clear" || description.includes("clear") || description.includes("sun")) {
-    return isDay === false ? resolveNightMoonSymbol(c) : "\uD83C\uDF1E";
+    return isDay === false ? { ...resolveNightMoonVisual(c), moon: true, moonImage: true } : { symbol: "\uD83C\uDF1E" };
   }
 
-  if (isDay === false) return resolveNightMoonSymbol(c);
-  if (isDay === true) return "\u2600";
-  return c?.symbol || "\u2601";
+  if (isDay === false) return { ...resolveNightMoonVisual(c), moon: true };
+  if (isDay === true) return { symbol: "\u2600" };
+  return { symbol: c?.symbol || "\u2601" };
 }
 
 function i18nLanguageCode(languageName) {
@@ -797,7 +808,26 @@ function applyBundle(bundle) {
 function renderCurrent() {
   if (!state.current) return;
   const c = state.current;
-  el.conditionSymbol.textContent = resolveConditionSymbol(c);
+  const visual = resolveConditionVisual(c);
+  const usesMoonImage = Boolean(visual.moonImage);
+  el.conditionSymbol.textContent = usesMoonImage ? "" : visual.symbol || "\u2601";
+  el.conditionSymbol.classList.toggle("is-moon-image", usesMoonImage);
+  const isRealMoon = Boolean(visual.moon) && !usesMoonImage;
+  el.conditionSymbol.classList.toggle("is-real-moon", isRealMoon);
+  if (isRealMoon) {
+    el.conditionSymbol.style.setProperty("--moon-shadow-width", `${Number(visual.shadowWidth || 48).toFixed(1)}%`);
+    el.conditionSymbol.style.setProperty("--moon-shadow-offset", `${Number(visual.shadowOffset || 0).toFixed(1)}%`);
+    const illumination = Number(visual.illumination || 0.5);
+    el.conditionSymbol.style.setProperty("--moon-shadow-opacity", `${Math.max(0.08, Math.min(0.46, (1 - illumination) * 0.52 + 0.03)).toFixed(2)}`);
+    el.conditionSymbol.style.setProperty("--moon-glow-opacity", `${Math.max(0.16, Math.min(0.42, 0.2 + illumination * 0.3)).toFixed(2)}`);
+    el.conditionSymbol.style.setProperty("--moon-core-brightness", `${Math.max(0.96, Math.min(1.16, 0.96 + illumination * 0.16)).toFixed(2)}`);
+  } else {
+    el.conditionSymbol.style.removeProperty("--moon-shadow-width");
+    el.conditionSymbol.style.removeProperty("--moon-shadow-offset");
+    el.conditionSymbol.style.removeProperty("--moon-shadow-opacity");
+    el.conditionSymbol.style.removeProperty("--moon-glow-opacity");
+    el.conditionSymbol.style.removeProperty("--moon-core-brightness");
+  }
   el.temperatureText.textContent = `${c.temperature ?? "--"} ${c.temperatureUnit || ""}`.trim();
   const baseDescription = c.description || "--";
   el.descriptionText.textContent = baseDescription;
@@ -1791,4 +1821,7 @@ async function initialize() {
 }
 
 void initialize();
+
+
+
 
