@@ -3,213 +3,193 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0a223f">
   <title>Regional Weather Studio</title>
+  <link rel="manifest" href="/manifest.json">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Sora:wght@400;500;600;700;800&family=Noto+Sans+Bengali:wght@400;600;700&family=Noto+Sans+Devanagari:wght@400;600;700&family=Noto+Sans+Tamil:wght@400;600;700&family=Noto+Sans+Malayalam:wght@400;600;700&family=Noto+Sans+Telugu:wght@400;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/css/app.css">
 </head>
-<body data-weather="default" class="mood-default">
-  <div class="fx-layer" aria-hidden="true">
-    <span class="fx-orb fx-orb-a"></span>
-    <span class="fx-orb fx-orb-b"></span>
-    <span class="fx-grid"></span>
+<body>
+  <div class="app-shell" id="appShell">
+    <aside class="sidebar">
+      <div class="brand">
+        <p class="brand-tag">Regional Weather Studio</p>
+        <h1>Weather Intelligence</h1>
+      </div>
+      <nav class="nav" id="sidebarNav">
+        <button class="nav-btn is-active" data-section="dashboard">Dashboard</button>
+        <button class="nav-btn" data-section="forecast">Forecast</button>
+        <button class="nav-btn" data-section="analytics">Analytics</button>
+        <button class="nav-btn" data-section="planner">Planner</button>
+        <button class="nav-btn" data-section="alerts">Alerts</button>
+        <button class="nav-btn" data-section="settings">Settings</button>
+      </nav>
+      <div class="install-wrap">
+        <button id="installBtn" class="ghost-btn" type="button" hidden>Install App</button>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <header class="topbar panel">
+        <div class="search-controls">
+          <input id="cityInput" type="text" placeholder="Search city" autocomplete="off">
+          <button id="fetchBtn" class="primary-btn" type="button">Get Weather</button>
+          <button id="locateBtn" class="ghost-btn" type="button">Use My Location</button>
+        </div>
+        <div class="settings-controls">
+          <select id="languageSelect"></select>
+          <select id="unitsSelect">
+            <option value="metric">Celsius</option>
+            <option value="imperial">Fahrenheit</option>
+          </select>
+          <input id="apiKeyInput" type="password" placeholder="Optional OpenWeather key">
+        </div>
+        <div class="quick-row">
+          <div id="quickCities" class="chip-row"></div>
+          <div id="favoriteCities" class="chip-row"></div>
+        </div>
+        <p id="statusText" class="status-text">Ready</p>
+      </header>
+
+      <section id="dashboard" class="section is-active">
+        <div class="grid cols-3">
+          <article class="panel card weather-card">
+            <div class="card-head">
+              <h2>Current Weather</h2>
+              <span id="conditionSymbol" class="symbol">&#9729;</span>
+            </div>
+            <p id="temperatureText" class="temperature">--</p>
+            <p id="descriptionText">--</p>
+            <p id="locationText" class="muted">--</p>
+            <div class="metric-grid" id="metricGrid"></div>
+          </article>
+
+          <article class="panel card">
+            <h2>AI Weather Insights</h2>
+            <p id="aiSummary" class="summary">Search a city to generate AI summary.</p>
+          </article>
+
+          <article class="panel card">
+            <h2>Activity Recommendations</h2>
+            <div id="activityList" class="list"></div>
+          </article>
+        </div>
+      </section>
+
+      <section id="forecast" class="section">
+        <article class="panel card">
+          <h2>15-Day Forecast</h2>
+          <div id="forecastCards" class="forecast-grid"></div>
+        </article>
+        <article class="panel card">
+          <h2>Best Outdoor Window</h2>
+          <p id="outdoorWindow" class="summary">--</p>
+        </article>
+      </section>
+
+      <section id="analytics" class="section">
+        <div class="grid cols-2">
+          <article class="panel card"><h2>Temperature Trends</h2><canvas id="tempChart"></canvas></article>
+          <article class="panel card"><h2>Rain Probability</h2><canvas id="rainChart"></canvas></article>
+          <article class="panel card"><h2>Wind Speed History</h2><canvas id="windChart"></canvas></article>
+          <article class="panel card"><h2>Humidity Analytics</h2><canvas id="humidityChart"></canvas></article>
+          <article class="panel card"><h2>UV Index Trends</h2><canvas id="uvChart"></canvas></article>
+          <article class="panel card">
+            <h2>Climate Insights</h2>
+            <p id="climateNarrative" class="summary">Load weather to evaluate climate patterns.</p>
+            <div id="climateStats" class="metric-grid"></div>
+          </article>
+        </div>
+      </section>
+
+      <section id="planner" class="section">
+        <div class="grid cols-2">
+          <article class="panel card">
+            <h2>Travel Weather Planner</h2>
+            <div class="form-grid">
+              <input id="travelDestination" type="text" placeholder="Destination city">
+              <input id="travelStart" type="date">
+              <input id="travelEnd" type="date">
+              <button id="travelBtn" class="primary-btn" type="button">Plan Travel</button>
+            </div>
+            <div id="travelResult" class="list"></div>
+          </article>
+
+          <article class="panel card">
+            <h2>Agriculture Advisor</h2>
+            <div class="form-grid">
+              <select id="cropType">
+                <option value="rice">Rice</option>
+                <option value="wheat">Wheat</option>
+                <option value="maize">Maize</option>
+                <option value="potato">Potato</option>
+                <option value="cotton">Cotton</option>
+              </select>
+              <button id="agriBtn" class="primary-btn" type="button">Get Farming Advice</button>
+            </div>
+            <div id="agriResult" class="list"></div>
+          </article>
+        </div>
+      </section>
+
+      <section id="alerts" class="section">
+        <article class="panel card">
+          <h2>Smart Weather Alerts</h2>
+          <div class="form-grid">
+            <label>Rain Probability % <input id="ruleRain" type="number" value="70" min="0" max="100"></label>
+            <label>Temperature C <input id="ruleTemp" type="number" value="35" min="-20" max="60"></label>
+            <label>Wind km/h <input id="ruleWind" type="number" value="40" min="0" max="200"></label>
+            <label>UV Index <input id="ruleUv" type="number" value="8" min="0" max="20"></label>
+            <label>Email for Alerts <input id="alertEmail" type="email" placeholder="you@example.com"></label>
+            <button id="evaluateAlertsBtn" class="primary-btn" type="button">Evaluate Alerts</button>
+          </div>
+          <div id="alertList" class="list"></div>
+        </article>
+      </section>
+
+      <section id="settings" class="section">
+        <div class="grid cols-2">
+          <article class="panel card">
+            <h2>User Account</h2>
+            <p id="authState" class="muted">Not logged in</p>
+            <div class="form-grid">
+              <input id="authEmail" type="email" placeholder="Email">
+              <input id="authPassword" type="password" placeholder="Password (8+ chars)">
+              <button id="signupBtn" class="primary-btn" type="button">Sign Up</button>
+              <button id="loginBtn" class="ghost-btn" type="button">Login</button>
+              <button id="logoutBtn" class="ghost-btn" type="button">Logout</button>
+            </div>
+          </article>
+
+          <article class="panel card">
+            <h2>Preferences</h2>
+            <div class="form-grid">
+              <label class="inline"><input id="darkModeToggle" type="checkbox"> Enable Dark Mode</label>
+              <button id="saveSettingsBtn" class="primary-btn" type="button">Save Preferences</button>
+            </div>
+            <div>
+              <h3>Saved Cities</h3>
+              <div id="savedCitiesServer" class="chip-row"></div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="chatbot panel">
+        <h2>Weather Chatbot</h2>
+        <div id="chatLog" class="chat-log"></div>
+        <div class="chat-input-row">
+          <input id="chatInput" type="text" placeholder="Will it rain tomorrow?">
+          <button id="chatSendBtn" class="primary-btn" type="button">Ask</button>
+        </div>
+      </section>
+    </main>
   </div>
 
-  <main class="app-shell">
-    <header class="hero panel">
-      <div class="hero-top">
-        <p id="heroChip" class="hero-chip">Live + Local</p>
-        <p id="updatedAtText" class="updated-at">Updated: --</p>
-      </div>
-
-      <div class="hero-layout">
-        <div class="hero-copy">
-          <h1 id="titleText">Regional Weather Studio</h1>
-          <p id="subtitleText">Modern weather app with inbuilt API key fallback for static hosting.</p>
-          <div class="hero-tags" aria-hidden="true">
-            <span class="hero-tag">Realtime</span>
-            <span class="hero-tag">Location Aware</span>
-            <span class="hero-tag">Multilingual</span>
-          </div>
-        </div>
-
-        <aside class="hero-side" aria-hidden="true">
-          <p class="hero-side-kicker">Atmosphere</p>
-          <p class="hero-side-line">Dynamic mood-driven theme</p>
-          <p class="hero-side-line">15-day trend explorer</p>
-          <p class="hero-side-line">Localized weather narratives</p>
-        </aside>
-      </div>
-    </header>
-
-    <section class="panel control-panel">
-      <div class="control-head">
-        <h2 class="control-title">Search Weather Intelligence</h2>
-        <p class="control-subtitle">Choose location, language, and units. Forecast refreshes instantly.</p>
-      </div>
-
-      <div class="control-grid">
-        <div class="city-row">
-          <label id="cityLabel" for="cityInput">City</label>
-          <div class="search-box">
-            <input id="cityInput" name="city" type="text" placeholder="Search city..." autocomplete="off">
-            <button id="fetchBtn" class="primary-btn" type="button">Get Weather</button>
-          </div>
-        </div>
-
-        <div class="settings-grid">
-          <div class="field-block">
-            <label id="languageLabel" for="languageSelect">Language</label>
-            <select id="languageSelect" name="language">
-              <option value="English">English</option>
-              <option value="Assamese">Assamese</option>
-              <option value="Bengali">Bengali</option>
-              <option value="Bodo">Bodo</option>
-              <option value="Dogri">Dogri</option>
-              <option value="Gujarati">Gujarati</option>
-              <option value="Hindi">Hindi</option>
-              <option value="Kannada">Kannada</option>
-              <option value="Kashmiri">Kashmiri</option>
-              <option value="Konkani">Konkani</option>
-              <option value="Maithili">Maithili</option>
-              <option value="Malayalam">Malayalam</option>
-              <option value="Manipuri">Manipuri</option>
-              <option value="Marathi">Marathi</option>
-              <option value="Nepali">Nepali</option>
-              <option value="Odia">Odia</option>
-              <option value="Punjabi">Punjabi</option>
-              <option value="Sanskrit">Sanskrit</option>
-              <option value="Santali">Santali</option>
-              <option value="Sindhi">Sindhi</option>
-              <option value="Tamil">Tamil</option>
-              <option value="Telugu">Telugu</option>
-              <option value="Urdu">Urdu</option>
-            </select>
-          </div>
-
-          <div class="field-block">
-            <label id="unitsLabel" for="unitsSelect">Units</label>
-            <select id="unitsSelect" name="units">
-              <option value="metric">Celsius</option>
-              <option value="imperial">Fahrenheit</option>
-            </select>
-          </div>
-
-          <div class="field-block field-wide">
-            <label id="apiKeyLabel" for="apiKeyInput">Custom API key (optional)</label>
-            <input id="apiKeyInput" name="apiKey" type="password" placeholder="Uses inbuilt keys if empty">
-          </div>
-        </div>
-      </div>
-
-      <div class="control-foot">
-        <div class="status-row">
-          <p id="statusText" class="status-text" aria-live="polite">Ready</p>
-        </div>
-
-        <div class="quick-row">
-          <p id="quickCityLabel" class="quick-label">Quick cities</p>
-          <div id="quickCities" class="chips"></div>
-        </div>
-
-        <div class="favorite-row">
-          <div class="favorite-head">
-            <p id="favoritesLabel" class="quick-label">Saved cities</p>
-            <button id="saveCityBtn" class="ghost-btn" type="button">Save city</button>
-          </div>
-          <div id="favoriteCities" class="chips chips-saved"></div>
-        </div>
-      </div>
-    </section>
-
-    <section id="weatherResultContainer" class="content-grid">
-      <article class="panel weather-main">
-        <div class="weather-main-top">
-          <p id="snapshotLabel" class="weather-kicker">Current Snapshot</p>
-        </div>
-        <div class="weather-icon-temp">
-          <span id="conditionSymbol" class="condition-symbol">&#x26C5;</span>
-          <div class="temperature-block">
-            <p id="temperatureText" class="temperature">-- &deg;C</p>
-            <p id="descriptionText" class="description">Weather unavailable</p>
-            <p id="locationText" class="location">--</p>
-          </div>
-        </div>
-      </article>
-
-      <article class="panel weather-details">
-        <div class="details-head">
-          <h2 id="detailsTitle" class="details-title">Atmospheric Metrics</h2>
-          <p id="detailsSubtitle" class="details-subtitle">Live values from current forecast</p>
-        </div>
-        <div class="details-grid">
-          <div class="detail-item"><span id="feelsLikeLabel">Feels like</span><strong id="feelsLikeValue">--</strong></div>
-          <div class="detail-item"><span id="humidityLabel">Humidity</span><strong id="humidityValue">--</strong></div>
-          <div class="detail-item"><span id="windLabel">Wind speed</span><strong id="windValue">--</strong></div>
-          <div class="detail-item"><span id="pressureLabel">Pressure</span><strong id="pressureValue">--</strong></div>
-          <div class="detail-item"><span id="cloudsLabel">Clouds</span><strong id="cloudsValue">--</strong></div>
-          <div class="detail-item"><span id="sunriseLabel">Sunrise</span><strong id="sunriseValue">--</strong></div>
-          <div class="detail-item"><span id="sunsetLabel">Sunset</span><strong id="sunsetValue">--</strong></div>
-          <div class="detail-item"><span id="sourceLabel">Data source</span><strong id="sourceValue">--</strong></div>
-        </div>
-      </article>
-    </section>
-
-    <section class="panel forecast-panel" aria-live="polite">
-      <div class="forecast-head">
-        <div>
-          <h2 id="forecastTitle" class="details-title">15-Day Outlook</h2>
-          <p id="forecastSubtitle" class="details-subtitle">Expected changes in temperature and rain probability.</p>
-        </div>
-        <p id="forecastTrend" class="forecast-trend">Expected change: --</p>
-      </div>
-
-      <p id="forecastDisclaimer" class="forecast-disclaimer">Forecast values can differ from Google because providers and weather models are different.</p>
-      <div id="forecastList" class="forecast-list"></div>
-
-      <div id="forecastDayDetails" class="forecast-day-details">
-        <p id="forecastSelectedTitle" class="forecast-selected-title">Selected day details</p>
-        <p id="forecastSelectedDate" class="forecast-selected-date">--</p>
-        <div class="forecast-day-grid">
-          <div class="forecast-day-item"><span id="forecastSelectedConditionLabel">Condition</span><strong id="forecastSelectedConditionValue">--</strong></div>
-          <div class="forecast-day-item"><span id="forecastSelectedTempLabel">High / Low</span><strong id="forecastSelectedTempValue">--</strong></div>
-          <div class="forecast-day-item"><span id="forecastSelectedRainLabel">Rain chance</span><strong id="forecastSelectedRainValue">--</strong></div>
-          <div class="forecast-day-item"><span id="forecastSelectedRainAmountLabel">Rain amount</span><strong id="forecastSelectedRainAmountValue">--</strong></div>
-        </div>
-      </div>
-    </section>
-
-    <section class="insight-grid">
-      <article class="panel insight-panel">
-        <div class="insight-head">
-          <h2 id="insightTitle" class="details-title">Weather Persona</h2>
-          <p id="comfortBadge" class="insight-badge">Comfort: --</p>
-        </div>
-        <p id="insightSummary" class="insight-summary">Search a city to generate a personalized weather narrative.</p>
-        <div id="insightTips" class="insight-tips"></div>
-      </article>
-
-      <article class="panel planner-panel">
-        <div class="insight-head">
-          <h2 id="plannerTitle" class="details-title">Best Outdoor Window</h2>
-          <p id="plannerConfidence" class="insight-badge">Confidence: --</p>
-        </div>
-        <p id="plannerWindow" class="planner-window">--</p>
-        <div class="planner-grid">
-          <div class="planner-item"><span id="plannerTempLabel">Temperature</span><strong id="plannerTempValue">--</strong></div>
-          <div class="planner-item"><span id="plannerRainLabel">Rain chance</span><strong id="plannerRainValue">--</strong></div>
-          <div class="planner-item"><span id="plannerWindLabel">Wind</span><strong id="plannerWindValue">--</strong></div>
-          <div class="planner-item"><span id="plannerUvLabel">UV index</span><strong id="plannerUvValue">--</strong></div>
-        </div>
-      </article>
-    </section>
-
-    <footer class="panel mini-footer" aria-hidden="true">
-      <p>Live feed fusion: OpenWeather + Open-Meteo</p>
-    </footer>
-  </main>
-
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script src="/static/js/app.js"></script>
 </body>
 </html>
+
