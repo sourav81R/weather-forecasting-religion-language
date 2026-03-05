@@ -33,6 +33,10 @@
 
     <main class="main-content">
       <header class="topbar panel">
+        <div class="topbar-head">
+          <p class="topbar-kicker">Live Climate Console</p>
+          <h2 class="topbar-title">Smarter Forecasting, Planning, and Alerts</h2>
+        </div>
         <div class="search-controls">
           <input id="cityInput" type="text" placeholder="Search city" autocomplete="off">
           <button id="fetchBtn" class="primary-btn" type="button">Get Weather</button>
@@ -47,13 +51,23 @@
           <input id="apiKeyInput" type="password" placeholder="Optional OpenWeather key">
         </div>
         <div class="quick-row">
-          <div id="quickCities" class="chip-row"></div>
-          <div id="favoriteCities" class="chip-row"></div>
+          <div class="chip-group">
+            <p class="group-label">Quick Cities</p>
+            <div id="quickCities" class="chip-row"></div>
+          </div>
+          <div class="chip-group">
+            <p class="group-label">Favorites</p>
+            <div id="favoriteCities" class="chip-row"></div>
+          </div>
         </div>
         <p id="statusText" class="status-text">Ready</p>
       </header>
 
       <section id="dashboard" class="section is-active">
+        <div class="section-head">
+          <h2 class="section-title">Weather Overview</h2>
+          <p class="section-subtitle">Live conditions, instant insight, and activity guidance in one place.</p>
+        </div>
         <div class="grid cols-3">
           <article class="panel card weather-card">
             <div class="card-head">
@@ -79,6 +93,10 @@
       </section>
 
       <section id="forecast" class="section">
+        <div class="section-head">
+          <h2 class="section-title">Forecast Planner</h2>
+          <p class="section-subtitle">Review upcoming conditions and pick the best outdoor windows.</p>
+        </div>
         <article class="panel card">
           <h2>15-Day Forecast</h2>
           <div id="forecastCards" class="forecast-grid"></div>
@@ -90,6 +108,10 @@
       </section>
 
       <section id="analytics" class="section">
+        <div class="section-head">
+          <h2 class="section-title">Weather Analytics</h2>
+          <p class="section-subtitle">Stabilized trend lines for temperature, rain, wind, humidity, and UV.</p>
+        </div>
         <div class="grid cols-2">
           <article class="panel card"><h2>Temperature Trends</h2><canvas id="tempChart"></canvas></article>
           <article class="panel card"><h2>Rain Probability</h2><canvas id="rainChart"></canvas></article>
@@ -105,6 +127,10 @@
       </section>
 
       <section id="planner" class="section">
+        <div class="section-head">
+          <h2 class="section-title">Decision Tools</h2>
+          <p class="section-subtitle">Build trip plans and agriculture decisions with weather-driven signals.</p>
+        </div>
         <div class="grid cols-2">
           <article class="panel card">
             <h2>Travel Weather Planner</h2>
@@ -135,6 +161,10 @@
       </section>
 
       <section id="alerts" class="section">
+        <div class="section-head">
+          <h2 class="section-title">Smart Alerts</h2>
+          <p class="section-subtitle">Configure thresholds and monitor severe weather signals quickly.</p>
+        </div>
         <article class="panel card">
           <h2>Smart Weather Alerts</h2>
           <div class="form-grid">
@@ -150,6 +180,10 @@
       </section>
 
       <section id="settings" class="section">
+        <div class="section-head">
+          <h2 class="section-title">Account & Preferences</h2>
+          <p class="section-subtitle">Manage identity, theme, and saved locations.</p>
+        </div>
         <div class="grid cols-2">
           <article class="panel card">
             <h2>User Account</h2>
