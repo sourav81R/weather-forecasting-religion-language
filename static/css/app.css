@@ -274,11 +274,30 @@ select {
 }
 
 .theme-toggle-btn {
-  min-height: 40px;
-  padding: 8px 12px;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0;
   font-size: 14px;
   white-space: nowrap;
   margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+}
+
+.theme-toggle-icon {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--brand-soft) 60%, transparent);
+  font-size: 14px;
+  line-height: 1;
 }
 
 .search-controls {
@@ -764,7 +783,7 @@ select:focus,
 
 @media (max-width: 520px) {
   .theme-toggle-btn {
-    width: 100%;
+    width: 44px;
     margin-left: 0;
   }
 

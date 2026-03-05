@@ -1,5 +1,5 @@
 const CACHE_KEY = "weather-studio-cache-v2";
-const PWA_CACHE_NAME = "weather-studio-pwa-v9";
+const PWA_CACHE_NAME = "weather-studio-pwa-v11";
 const FAVORITES_KEY = "weather-studio-favorites-v2";
 const LAST_COORDS_KEY = "weather-studio-last-coords-v2";
 const QUICK_CITIES = ["Kolkata", "Delhi", "Mumbai", "Chennai", "Dhaka", "Bengaluru"];
@@ -1388,7 +1388,11 @@ function applyDarkMode() {
   const isDark = Boolean(el.darkModeToggle?.checked);
   document.body.classList.toggle("dark", isDark);
   if (el.themeToggleBtn) {
-    el.themeToggleBtn.textContent = isDark ? "Light Mode" : "Dark Mode";
+    const iconNode = el.themeToggleBtn.querySelector(".theme-toggle-icon");
+    if (iconNode) iconNode.textContent = isDark ? "\u2600" : "\uD83C\uDF19";
+    const nextModeLabel = isDark ? "Switch to light mode" : "Switch to dark mode";
+    el.themeToggleBtn.setAttribute("aria-label", nextModeLabel);
+    el.themeToggleBtn.setAttribute("title", nextModeLabel);
     el.themeToggleBtn.setAttribute("aria-pressed", isDark ? "true" : "false");
   }
   localStorage.setItem("weather-studio-dark-mode", isDark ? "1" : "0");

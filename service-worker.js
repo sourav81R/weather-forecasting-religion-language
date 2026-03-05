@@ -1,15 +1,15 @@
-const CACHE_NAME = "weather-studio-pwa-v9";
+const CACHE_NAME = "weather-studio-pwa-v11";
 const OFFLINE_ASSETS = [
   "/",
   "/frontend/index.html",
   "/css/app.css",
-  "/css/app.css?v=20260305-4",
+  "/css/app.css?v=20260305-6",
   "/js/app.js",
-  "/js/app.js?v=20260305-4",
+  "/js/app.js?v=20260305-6",
   "/static/css/app.css",
-  "/static/css/app.css?v=20260305-4",
+  "/static/css/app.css?v=20260305-6",
   "/static/js/app.js",
-  "/static/js/app.js?v=20260305-4",
+  "/static/js/app.js?v=20260305-6",
   "/manifest.json",
   "/components/icon-192.png",
   "/components/icon-512.png",
