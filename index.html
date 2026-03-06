@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/app.css?v=20260306-10">
+  <link rel="stylesheet" href="/frontend/css/app.css?v=20260306-14">
 </head>
 <body>
   <div class="app-shell" id="appShell">
@@ -46,6 +46,7 @@
     </aside>
 
     <main class="main-content">
+      <div id="offlineBanner" class="offline-banner" hidden>Offline Mode – Showing predicted forecast based on cached data</div>
       <header class="topbar panel">
         <div class="topbar-head-row">
           <div class="topbar-head">
@@ -114,6 +115,17 @@
             <div id="mlPredictionList" class="list">
               <div class="list-item">Load weather to generate ML prediction.</div>
             </div>
+          </article>
+
+          <article id="offlineForecastCard" class="panel card" hidden>
+            <h2>Offline Forecast</h2>
+            <div class="list">
+              <div class="list-item"><strong>Predicted Temperature</strong><div id="offlineForecastTemp">--</div></div>
+              <div class="list-item"><strong>Predicted Rain Chance</strong><div id="offlineForecastRain">--</div></div>
+              <div class="list-item"><strong>Predicted Wind</strong><div id="offlineForecastWind">--</div></div>
+              <div class="list-item"><strong>Trend Signals</strong><div id="offlineForecastTrend">--</div></div>
+            </div>
+            <p id="offlineForecastMeta" class="summary">Offline prediction metadata will appear here.</p>
           </article>
         </div>
       </section>
@@ -194,6 +206,22 @@
             <div id="skyAnalysisResult" class="list sky-analysis-list">
               <div class="list-item">Upload a sky photo to estimate cloud and rain risk.</div>
             </div>
+
+            <div class="live-camera-block">
+              <h3>Live Sky Scanner</h3>
+              <div class="camera-controls">
+                <button id="liveCameraStartBtn" class="primary-btn" type="button">Start Camera</button>
+                <button id="liveCameraStopBtn" class="ghost-btn" type="button" disabled>Stop Camera</button>
+                <button id="liveCameraCaptureBtn" class="primary-btn" type="button" disabled>Capture Sky</button>
+                <button id="liveCameraScanBtn" class="ghost-btn" type="button" disabled>Start Live Scan</button>
+              </div>
+              <p id="liveCameraStatus" class="muted">Start camera to scan the sky live. If camera is unavailable, use image upload.</p>
+              <video id="liveCameraVideo" class="sky-live-video" autoplay playsinline muted></video>
+              <canvas id="liveCameraCanvas" class="sky-live-canvas"></canvas>
+              <div id="liveSkyResult" class="list sky-analysis-list">
+                <div class="list-item">Live camera predictions will appear here.</div>
+              </div>
+            </div>
           </article>
         </div>
       </section>
@@ -261,7 +289,7 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <script src="/static/js/app.js?v=20260306-10"></script>
+  <script src="/frontend/js/app.js?v=20260306-14"></script>
 </body>
 </html>
 

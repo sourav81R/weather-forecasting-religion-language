@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from flask import Flask, send_from_directory
+from flask import Flask, request, send_from_directory
 from flask_login import LoginManager
 
 from backend.config import get_settings
@@ -18,6 +18,12 @@ from backend.routes.weather_routes import bp as weather_bp
 def create_app() -> Flask:
     settings = get_settings()
     frontend_dir = Path(__file__).resolve().parent.parent / "frontend"
+    allowed_cors_origins = {
+        "http://127.0.0.1:5500",
+        "http://localhost:5500",
+        "http://127.0.0.1:5000",
+        "http://localhost:5000",
+    }
 
     app = Flask(__name__)
     app.config.update(
@@ -34,6 +40,17 @@ def create_app() -> Flask:
     app.register_blueprint(auth_bp)
     app.register_blueprint(ml_bp)
     app.register_blueprint(vision_bp)
+
+    @app.after_request
+    def add_cors_headers(response):
+        origin = request.headers.get("Origin", "")
+        if origin in allowed_cors_origins:
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+            response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+            response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+            response.headers["Vary"] = "Origin"
+        return response
 
     @app.get("/")
     def index():
