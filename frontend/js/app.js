@@ -8,6 +8,7 @@ const WEATHER_HISTORY_READ_LIMIT = 144;
 const OFFLINE_MODE_BANNER_TEXT = "Offline Mode – Showing predicted forecast based on cached data";
 const LIVE_SCAN_INTERVAL_MS = 5000;
 const LIVE_SCAN_CACHE_TTL_MS = 60 * 1000;
+const CHAT_HISTORY_LIMIT = 12;
 const LUNAR_CYCLE_DAYS = 29.53058867;
 const REFERENCE_NEW_MOON_UTC_MS = Date.UTC(2000, 0, 6, 18, 14, 0);
 const QUICK_CITIES = ["Kolkata", "Delhi", "Mumbai", "Chennai", "Dhaka", "Bengaluru"];
@@ -146,6 +147,7 @@ const el = {
   liveCameraStopBtn: document.getElementById("liveCameraStopBtn"),
   liveCameraCaptureBtn: document.getElementById("liveCameraCaptureBtn"),
   liveCameraScanBtn: document.getElementById("liveCameraScanBtn"),
+  liveCameraFlipBtn: document.getElementById("liveCameraFlipBtn"),
   liveCameraVideo: document.getElementById("liveCameraVideo"),
   liveCameraCanvas: document.getElementById("liveCameraCanvas"),
   liveCameraStatus: document.getElementById("liveCameraStatus"),
@@ -198,8 +200,10 @@ const state = {
   offlineMode: false,
   offlineForecast: null,
   offlineForecastEngine: null,
+  chatHistory: [],
   liveCamera: {
     controller: null,
+    facingMode: "environment",
     scanning: false,
     busy: false,
     scanTimer: null,
@@ -520,6 +524,36 @@ function isSecureLiveCameraContext() {
   return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
 }
 
+function normalizeLiveCameraFacingMode(value) {
+  return String(value || "").toLowerCase() === "user" ? "user" : "environment";
+}
+
+function liveCameraFacingLabel(value) {
+  return normalizeLiveCameraFacingMode(value) === "user" ? "front camera" : "rear camera";
+}
+
+function liveCameraToggleLabel(value) {
+  return normalizeLiveCameraFacingMode(value) === "user" ? "Use Rear Camera" : "Use Front Camera";
+}
+
+function applyLiveCameraFacingUi() {
+  const facingMode = normalizeLiveCameraFacingMode(state.liveCamera.facingMode);
+  state.liveCamera.facingMode = facingMode;
+
+  if (el.liveCameraVideo) {
+    el.liveCameraVideo.dataset.facing = facingMode;
+  }
+  if (el.skyImageInput) {
+    el.skyImageInput.setAttribute("capture", facingMode === "user" ? "user" : "environment");
+  }
+  if (el.liveCameraFlipBtn) {
+    const label = liveCameraToggleLabel(facingMode);
+    el.liveCameraFlipBtn.textContent = label;
+    el.liveCameraFlipBtn.setAttribute("aria-label", label);
+    el.liveCameraFlipBtn.setAttribute("title", label);
+  }
+}
+
 function setLiveScanButtonLabel(scanning) {
   if (!el.liveCameraScanBtn) return;
   el.liveCameraScanBtn.textContent = scanning ? "Stop Live Scan" : "Start Live Scan";
@@ -531,7 +565,9 @@ function setLiveCameraButtons() {
   if (el.liveCameraStopBtn) el.liveCameraStopBtn.disabled = !active;
   if (el.liveCameraCaptureBtn) el.liveCameraCaptureBtn.disabled = !active || state.liveCamera.busy;
   if (el.liveCameraScanBtn) el.liveCameraScanBtn.disabled = !active || state.liveCamera.busy;
+  if (el.liveCameraFlipBtn) el.liveCameraFlipBtn.disabled = state.liveCamera.busy;
   setLiveScanButtonLabel(Boolean(state.liveCamera.scanning));
+  applyLiveCameraFacingUi();
 }
 
 function stopLiveScan() {
@@ -2406,6 +2442,7 @@ async function ensureLiveCameraController() {
   const controller = new module.LiveCameraController({
     videoElement: el.liveCameraVideo,
     canvasElement: el.liveCameraCanvas,
+    preferredFacingMode: state.liveCamera.facingMode,
   });
   state.liveCamera.controller = controller;
   return controller;
@@ -2413,15 +2450,14 @@ async function ensureLiveCameraController() {
 
 function initializeLiveCameraUi() {
   if (!el.liveCameraStartBtn || !el.liveCameraVideo || !el.liveCameraCanvas) return;
-  if (el.skyImageInput) {
-    el.skyImageInput.setAttribute("capture", "environment");
-  }
+  applyLiveCameraFacingUi();
   const supported = Boolean(navigator?.mediaDevices?.getUserMedia);
   if (!supported) {
     el.liveCameraStartBtn.disabled = true;
     if (el.liveCameraStopBtn) el.liveCameraStopBtn.disabled = true;
     if (el.liveCameraCaptureBtn) el.liveCameraCaptureBtn.disabled = true;
     if (el.liveCameraScanBtn) el.liveCameraScanBtn.disabled = true;
+    if (el.liveCameraFlipBtn) el.liveCameraFlipBtn.disabled = true;
     setLiveCameraStatus("Live camera is unavailable in this browser. Use file upload as fallback.", "error");
     return;
   }
@@ -2430,21 +2466,25 @@ function initializeLiveCameraUi() {
     if (el.liveCameraStopBtn) el.liveCameraStopBtn.disabled = true;
     if (el.liveCameraCaptureBtn) el.liveCameraCaptureBtn.disabled = true;
     if (el.liveCameraScanBtn) el.liveCameraScanBtn.disabled = true;
+    if (el.liveCameraFlipBtn) el.liveCameraFlipBtn.disabled = true;
     setLiveCameraStatus("Live camera needs HTTPS on mobile. Open this app using https:// and retry.", "error");
     return;
   }
-  setLiveCameraStatus("Use Start Camera to begin live sky scanning.");
+  setLiveCameraStatus(`Use Start Camera to begin live sky scanning with the ${liveCameraFacingLabel(state.liveCamera.facingMode)}.`);
   setLiveCameraButtons();
 }
 
-async function startLiveCamera() {
+async function startLiveCamera(options = {}) {
   if (!el.liveCameraVideo || !el.liveCameraCanvas) return;
+  const requestedFacingMode = normalizeLiveCameraFacingMode(options.facingMode || state.liveCamera.facingMode);
   try {
     const controller = await ensureLiveCameraController();
-    await controller.start();
+    const started = await controller.start({ facingMode: requestedFacingMode });
+    state.liveCamera.facingMode = normalizeLiveCameraFacingMode(started?.facingMode || requestedFacingMode);
     if (el.liveCameraCanvas) el.liveCameraCanvas.style.display = "none";
-    setLiveCameraStatus("Camera started. Point to sky and capture.");
-    setStatus("Live camera ready.", "success");
+    applyLiveCameraFacingUi();
+    setLiveCameraStatus(`${capitalize(liveCameraFacingLabel(state.liveCamera.facingMode))} started. Point to sky and capture.`, "success");
+    setStatus(`${capitalize(liveCameraFacingLabel(state.liveCamera.facingMode))} ready.`, "success");
   } catch (error) {
     const message = String(error?.message || "Unable to start camera.");
     setLiveCameraStatus(`Camera error: ${message}`, "error");
@@ -2460,6 +2500,7 @@ function stopLiveCamera() {
   if (state.liveCamera.controller) {
     state.liveCamera.controller.stop();
   }
+  if (el.liveCameraCanvas) el.liveCameraCanvas.style.display = "none";
   setLiveCameraStatus("Camera stopped.");
   setLiveCameraButtons();
 }
@@ -2528,6 +2569,18 @@ async function captureLiveSkyFrame(options = {}) {
   }
 }
 
+async function startLiveSkyScanLoop(statusMessage = "Live scan running every 5 seconds.") {
+  stopLiveScan();
+  state.liveCamera.scanning = true;
+  setLiveScanButtonLabel(true);
+  setLiveCameraStatus(statusMessage);
+  await captureLiveSkyFrame({ fromLiveScan: true });
+  state.liveCamera.scanTimer = setInterval(() => {
+    void captureLiveSkyFrame({ fromLiveScan: true });
+  }, LIVE_SCAN_INTERVAL_MS);
+  setLiveCameraButtons();
+}
+
 async function toggleLiveSkyScan() {
   if (state.liveCamera.scanning) {
     stopLiveScan();
@@ -2543,14 +2596,76 @@ async function toggleLiveSkyScan() {
     }
   }
 
-  state.liveCamera.scanning = true;
-  setLiveScanButtonLabel(true);
-  setLiveCameraStatus("Live scan running every 5 seconds.");
-  await captureLiveSkyFrame({ fromLiveScan: true });
-  state.liveCamera.scanTimer = setInterval(() => {
-    void captureLiveSkyFrame({ fromLiveScan: true });
-  }, LIVE_SCAN_INTERVAL_MS);
-  setLiveCameraButtons();
+  await startLiveSkyScanLoop("Live scan running every 5 seconds.");
+}
+
+async function flipLiveCameraFacingMode() {
+  if (state.liveCamera.busy) return;
+
+  const previousFacingMode = normalizeLiveCameraFacingMode(state.liveCamera.facingMode);
+  const nextFacingMode = previousFacingMode === "user" ? "environment" : "user";
+  let controller = null;
+  let wasActive = false;
+  let wasScanning = false;
+  try {
+    controller = await ensureLiveCameraController();
+    wasActive = Boolean(controller?.isActive?.());
+    wasScanning = Boolean(state.liveCamera.scanning);
+
+    state.liveCamera.facingMode = nextFacingMode;
+    applyLiveCameraFacingUi();
+
+    if (!wasActive) {
+      setLiveCameraStatus(`${capitalize(liveCameraFacingLabel(nextFacingMode))} selected. Start camera to use it.`, "success");
+      setStatus(`${capitalize(liveCameraFacingLabel(nextFacingMode))} selected.`, "success");
+      setLiveCameraButtons();
+      return;
+    }
+
+    stopLiveScan();
+    state.liveCamera.busy = true;
+    setLiveCameraButtons();
+
+    const started = await controller.start({ facingMode: nextFacingMode });
+    state.liveCamera.facingMode = normalizeLiveCameraFacingMode(started?.facingMode || nextFacingMode);
+    applyLiveCameraFacingUi();
+    if (el.liveCameraCanvas) el.liveCameraCanvas.style.display = "none";
+    setLiveCameraStatus(`${capitalize(liveCameraFacingLabel(state.liveCamera.facingMode))} active. Point to sky and capture.`, "success");
+    setStatus(`${capitalize(liveCameraFacingLabel(state.liveCamera.facingMode))} ready.`, "success");
+    state.liveCamera.busy = false;
+    if (wasScanning) {
+      await startLiveSkyScanLoop(`Live scan running on the ${liveCameraFacingLabel(state.liveCamera.facingMode)}.`);
+    }
+  } catch (error) {
+    const message = String(error?.message || "Unable to switch camera.");
+    state.liveCamera.facingMode = previousFacingMode;
+    applyLiveCameraFacingUi();
+
+    let restored = false;
+    if (wasActive) {
+      try {
+        const restarted = await controller.start({ facingMode: previousFacingMode });
+        state.liveCamera.facingMode = normalizeLiveCameraFacingMode(restarted?.facingMode || previousFacingMode);
+        applyLiveCameraFacingUi();
+        restored = true;
+        state.liveCamera.busy = false;
+        if (wasScanning) {
+          await startLiveSkyScanLoop(`Live scan resumed on the ${liveCameraFacingLabel(state.liveCamera.facingMode)}.`);
+        }
+      } catch {
+        restored = false;
+      }
+    }
+
+    setLiveCameraStatus(
+      restored ? `${message} Kept ${liveCameraFacingLabel(state.liveCamera.facingMode)} active.` : message,
+      "error",
+    );
+    setStatus(message, "error");
+  } finally {
+    state.liveCamera.busy = false;
+    setLiveCameraButtons();
+  }
 }
 
 function appendChat(text, role) {
@@ -2559,6 +2674,16 @@ function appendChat(text, role) {
   bubble.textContent = text;
   el.chatLog.appendChild(bubble);
   el.chatLog.scrollTop = el.chatLog.scrollHeight;
+}
+
+function rememberChatTurn(role, text) {
+  const normalizedRole = role === "user" ? "user" : "model";
+  const message = String(text || "").trim();
+  if (!message) return;
+  state.chatHistory.push({ role: normalizedRole, text: message });
+  if (state.chatHistory.length > CHAT_HISTORY_LIMIT) {
+    state.chatHistory = state.chatHistory.slice(-CHAT_HISTORY_LIMIT);
+  }
 }
 
 function chatHas(text, words) {
@@ -2668,16 +2793,22 @@ async function askChatbot() {
   el.chatInput.value = "";
   appendChat(question, "user");
   if (state.staticMode) {
-    appendChat(answerStaticWeatherQuestion(question), "bot");
+    const staticAnswer = answerStaticWeatherQuestion(question);
+    appendChat(staticAnswer, "bot");
+    rememberChatTurn("user", question);
+    rememberChatTurn("model", staticAnswer);
     return;
   }
 
   try {
     const response = await apiRequest("/api/chatbot", {
       method: "POST",
-      body: JSON.stringify({ ...currentPayload(), ...locationPayload(), question }),
+      body: JSON.stringify({ ...currentPayload(), ...locationPayload(), question, history: state.chatHistory }),
     });
-    appendChat(response.answer || "No answer available.", "bot");
+    const answer = response.answer || "No answer available.";
+    appendChat(answer, "bot");
+    rememberChatTurn("user", question);
+    rememberChatTurn("model", answer);
   } catch (error) {
     appendChat(`Error: ${error.message}`, "bot");
   }
@@ -3285,6 +3416,9 @@ function wireEvents() {
   if (el.liveCameraScanBtn) {
     el.liveCameraScanBtn.addEventListener("click", () => void toggleLiveSkyScan());
   }
+  if (el.liveCameraFlipBtn) {
+    el.liveCameraFlipBtn.addEventListener("click", () => void flipLiveCameraFacingMode());
+  }
   el.evaluateAlertsBtn.addEventListener("click", () => void evaluateAlerts());
   el.chatSendBtn.addEventListener("click", () => void askChatbot());
   el.chatInput.addEventListener("keydown", (event) => {
@@ -3358,7 +3492,7 @@ async function initialize() {
 
   await loadAuthState();
   await useCurrentLocation();
-  appendChat("Ask me about rain, weekend temperature, or outdoor plans.", "bot");
+  appendChat("Ask about weather, forecasts, planning, or general questions.", "bot");
   window.addEventListener("beforeunload", () => {
     stopLiveCamera();
   });

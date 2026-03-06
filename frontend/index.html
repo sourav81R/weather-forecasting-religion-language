@@ -14,7 +14,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="/css/app.css?v=20260306-18">
+  <link rel="stylesheet" href="/css/app.css?v=20260306-24">
 </head>
 <body>
   <div class="app-shell" id="appShell">
@@ -217,6 +217,7 @@
                 <button id="liveCameraStopBtn" class="ghost-btn" type="button" disabled>Stop Camera</button>
                 <button id="liveCameraCaptureBtn" class="primary-btn" type="button" disabled>Capture Sky</button>
                 <button id="liveCameraScanBtn" class="ghost-btn" type="button" disabled>Start Live Scan</button>
+                <button id="liveCameraFlipBtn" class="ghost-btn camera-flip-btn" type="button">Use Front Camera</button>
               </div>
               <p id="liveCameraStatus" class="muted">Start camera to scan the sky live. If camera is unavailable, use image upload.</p>
               <video id="liveCameraVideo" class="sky-live-video" autoplay playsinline muted></video>
@@ -332,7 +333,7 @@
         <h2>Weather Chatbot</h2>
         <div id="chatLog" class="chat-log"></div>
         <div class="chat-input-row">
-          <input id="chatInput" type="text" placeholder="Will it rain tomorrow?">
+          <input id="chatInput" type="text" placeholder="Ask about weather or anything else">
           <button id="chatSendBtn" class="primary-btn" type="button">Ask</button>
         </div>
       </section>
@@ -342,7 +343,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet-velocity/dist/leaflet-velocity.min.js"></script>
-  <script src="/js/app.js?v=20260306-23"></script>
+  <script src="/js/app.js?v=20260306-25"></script>
 </body>
 </html>
 

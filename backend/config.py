@@ -13,6 +13,9 @@ class Settings:
     weather_timeout_seconds: int
     cache_ttl_seconds: int
     openweather_keys: tuple[str, ...]
+    gemini_api_key: str
+    gemini_model: str
+    gemini_timeout_seconds: int
     smtp_host: str
     smtp_port: int
     smtp_username: str
@@ -40,6 +43,9 @@ def get_settings() -> Settings:
         weather_timeout_seconds=int(os.getenv("WEATHER_TIMEOUT_SECONDS", "15")),
         cache_ttl_seconds=int(os.getenv("CACHE_TTL_SECONDS", "600")),
         openweather_keys=tuple(key_list) if key_list else default_keys,
+        gemini_api_key=os.getenv("GEMINI_API_KEY", "AIzaSyD_98RIsX0diVgMQbKINK-zST4czaCodCI").strip(),
+        gemini_model=os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip() or "gemini-2.5-flash",
+        gemini_timeout_seconds=int(os.getenv("GEMINI_TIMEOUT_SECONDS", "30")),
         smtp_host=os.getenv("SMTP_HOST", ""),
         smtp_port=int(os.getenv("SMTP_PORT", "587")),
         smtp_username=os.getenv("SMTP_USERNAME", ""),

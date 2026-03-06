@@ -1156,6 +1156,10 @@ select:focus,
   gap: 8px;
 }
 
+.camera-flip-btn {
+  grid-column: 1 / -1;
+}
+
 .sky-live-video,
 .sky-live-canvas {
   width: 100%;
@@ -1168,6 +1172,10 @@ select:focus,
 
 .sky-live-video {
   min-height: 190px;
+}
+
+.sky-live-video[data-facing="user"] {
+  transform: scaleX(-1);
 }
 
 .sky-live-canvas {

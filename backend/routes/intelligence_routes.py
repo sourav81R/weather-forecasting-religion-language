@@ -148,6 +148,7 @@ def activity():
 def chatbot():
     payload = request.get_json(silent=True) or {}
     question = str(payload.get("question", "")).strip()
+    history = payload.get("history") if isinstance(payload.get("history"), list) else []
 
     try:
         current, forecast = _weather_context(payload)
@@ -161,7 +162,7 @@ def chatbot():
                 "rainProbability": today.get("rainProbability", 0),
             }
         )
-        answer = chatbot_response(question, current, forecast, activity_payload)
+        answer = chatbot_response(question, current, forecast, activity_payload, history=history)
         return jsonify({"answer": answer})
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
