@@ -1,4 +1,4 @@
-const CACHE_VERSION = "weather-studio-pwa-v29";
+const CACHE_VERSION = "weather-studio-pwa-v31";
 const UI_CACHE = `${CACHE_VERSION}-ui`;
 const DATA_CACHE = `${CACHE_VERSION}-data`;
 
@@ -8,13 +8,17 @@ const CORE_UI_ASSETS = [
   "/manifest.json",
   "/css/app.css",
   "/css/app.css?v=20260306-18",
+  "/static/css/app.css",
+  "/static/css/app.css?v=20260306-8",
   "/js/app.js",
-  "/js/app.js?v=20260306-21",
+  "/js/app.js?v=20260306-22",
+  "/static/js/app.js",
+  "/static/js/app.js?v=20260306-10",
   "/js/weatherMap.js",
   "/js/offlineForecast.js",
   "/js/liveCamera.js",
   "/frontend/css/app.css?v=20260306-18",
-  "/frontend/js/app.js?v=20260306-21",
+  "/frontend/js/app.js?v=20260306-22",
   "/frontend/js/weatherMap.js",
   "/frontend/js/offlineForecast.js",
   "/frontend/js/liveCamera.js",
@@ -84,7 +88,10 @@ function isUiAssetRequest(request, url) {
 
   if (url.pathname.startsWith("/css/")) return true;
   if (url.pathname.startsWith("/js/")) return true;
+  if (url.pathname.startsWith("/static/css/")) return true;
+  if (url.pathname.startsWith("/static/js/")) return true;
   if (url.pathname.startsWith("/components/")) return true;
+  if (url.pathname.startsWith("/static/components/")) return true;
   if (url.pathname.startsWith("/frontend/css/")) return true;
   if (url.pathname.startsWith("/frontend/js/")) return true;
   if (url.pathname.startsWith("/frontend/components/")) return true;

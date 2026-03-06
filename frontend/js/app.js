@@ -1,5 +1,4 @@
 const CACHE_KEY = "weather-studio-cache-v2";
-const PWA_CACHE_NAME = "weather-studio-pwa-v27";
 const FAVORITES_KEY = "weather-studio-favorites-v2";
 const LAST_COORDS_KEY = "weather-studio-last-coords-v2";
 const WEATHER_HISTORY_DB_NAME = "weather-studio-history-v1";
@@ -3065,50 +3064,116 @@ async function fetchConfig() {
 
 function setupPwa() {
   if (!el.installBtn) return;
-
-  if (el.installBtn) {
+  const isIosDevice = () => /iphone|ipad|ipod/.test(String(navigator?.userAgent || "").toLowerCase());
+  const isAndroidDevice = () => String(navigator?.userAgent || "").toLowerCase().includes("android");
+  const installContextSecure = () => {
+    if (typeof window === "undefined") return true;
+    if (window.isSecureContext) return true;
+    const hostname = String(window.location?.hostname || "").toLowerCase();
+    return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+  };
+  const isStandaloneInstalled = () => {
+    if (typeof window === "undefined") return false;
+    const displayStandalone = typeof window.matchMedia === "function" && window.matchMedia("(display-mode: standalone)").matches;
+    const iosStandalone = Boolean(window.navigator?.standalone);
+    return displayStandalone || iosStandalone;
+  };
+  const setInstallButton = (text, disabled = false) => {
     el.installBtn.hidden = false;
-    el.installBtn.disabled = true;
-    el.installBtn.textContent = "Install App";
-  }
+    el.installBtn.disabled = Boolean(disabled);
+    el.installBtn.textContent = String(text || "Install App");
+  };
+  const waitForInstallPrompt = (timeoutMs = 1800) =>
+    new Promise((resolve) => {
+      if (state.deferredPrompt) {
+        resolve(true);
+        return;
+      }
+      const started = Date.now();
+      const poll = () => {
+        if (state.deferredPrompt) {
+          resolve(true);
+          return;
+        }
+        if (Date.now() - started >= timeoutMs) {
+          resolve(false);
+          return;
+        }
+        window.setTimeout(poll, 120);
+      };
+      poll();
+    });
+  const fallbackInstallMessage = () => {
+    if (isStandaloneInstalled()) return "App is already installed.";
+    if (!installContextSecure()) return "Install requires HTTPS on mobile. Open this app with https:// and try again.";
+    if (isIosDevice()) return "On iPhone/iPad, open Share and tap Add to Home Screen.";
+    if (isAndroidDevice()) return "On Android, open browser menu and tap Install app or Add to Home screen.";
+    return "On desktop, open browser menu and choose Install app.";
+  };
 
-  if ("caches" in window) {
-    const activeCaches = new Set([PWA_CACHE_NAME, `${PWA_CACHE_NAME}-ui`, `${PWA_CACHE_NAME}-data`]);
-    caches
-      .keys()
-      .then((keys) =>
-        Promise.all(keys.filter((key) => key.startsWith("weather-studio-pwa-") && !activeCaches.has(key)).map((key) => caches.delete(key)))
-      )
-      .catch(() => {});
+  if (isStandaloneInstalled()) {
+    setInstallButton("App Installed", true);
+    return;
   }
+  setInstallButton("Install App", true);
 
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker
       .register("/service-worker.js")
       .then((registration) => registration.update().catch(() => {}))
-      .catch(() => {});
+      .catch(() => {
+        setStatus("Service worker registration failed. Install may be unavailable.", "error");
+      })
+      .finally(() => {
+        if (!isStandaloneInstalled()) setInstallButton("Install App", false);
+      });
+  } else {
+    setInstallButton("Install App", false);
   }
   window.addEventListener("beforeinstallprompt", (event) => {
     event.preventDefault();
     state.deferredPrompt = event;
-    if (el.installBtn) el.installBtn.disabled = false;
+    setInstallButton("Install App", false);
   });
   window.addEventListener("appinstalled", () => {
     state.deferredPrompt = null;
-    if (el.installBtn) {
-      el.installBtn.disabled = true;
-      el.installBtn.textContent = "App Installed";
-    }
+    setInstallButton("App Installed", true);
+    setStatus("App installed successfully.", "success");
   });
   el.installBtn.addEventListener("click", async () => {
-    if (!state.deferredPrompt) {
-      setStatus("Install prompt not available yet. Keep using the app and try again.", "error");
+    if (isStandaloneInstalled()) {
+      setInstallButton("App Installed", true);
+      setStatus("App is already installed.", "success");
       return;
     }
-    state.deferredPrompt.prompt();
-    await state.deferredPrompt.userChoice;
-    state.deferredPrompt = null;
-    el.installBtn.disabled = true;
+    if (!state.deferredPrompt) {
+      const promptReady = await waitForInstallPrompt();
+      if (!promptReady) {
+        setStatus(fallbackInstallMessage());
+        return;
+      }
+    }
+    try {
+      const installPrompt = state.deferredPrompt;
+      if (!installPrompt) {
+        setStatus(fallbackInstallMessage());
+        return;
+      }
+      installPrompt.prompt();
+      const choice = await installPrompt.userChoice;
+      if (choice?.outcome === "dismissed") {
+        setStatus("Install prompt dismissed.");
+      }
+    } catch {
+      setStatus(fallbackInstallMessage());
+    } finally {
+      state.deferredPrompt = null;
+      if (isStandaloneInstalled()) {
+        setInstallButton("App Installed", true);
+      } else {
+        setInstallButton("Install App", false);
+      }
+    }
   });
 }
 
