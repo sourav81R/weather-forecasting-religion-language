@@ -1,5 +1,5 @@
 const CACHE_KEY = "weather-studio-cache-v2";
-const PWA_CACHE_NAME = "weather-studio-pwa-v23";
+const PWA_CACHE_NAME = "weather-studio-pwa-v24";
 const FAVORITES_KEY = "weather-studio-favorites-v2";
 const LAST_COORDS_KEY = "weather-studio-last-coords-v2";
 const WEATHER_HISTORY_DB_NAME = "weather-studio-history-v1";
@@ -145,7 +145,6 @@ const el = {
   alertEmail: document.getElementById("alertEmail"),
   evaluateAlertsBtn: document.getElementById("evaluateAlertsBtn"),
   alertList: document.getElementById("alertList"),
-  mapSelection: document.getElementById("mapSelection"),
   installBtn: document.getElementById("installBtn"),
   authState: document.getElementById("authState"),
   authEmail: document.getElementById("authEmail"),
@@ -181,8 +180,7 @@ const state = {
   charts: {},
   user: { authenticated: false },
   localFavorites: loadLocalFavorites(),
-  map: null,
-  focusMarker: null,
+  weatherMapController: null,
   deferredPrompt: null,
   offlineMode: false,
   offlineForecast: null,
@@ -206,6 +204,7 @@ const i18nState = {
 let weatherHistoryDbPromise = null;
 let offlineForecastModulePromise = null;
 let liveCameraModulePromise = null;
+let weatherMapModulePromise = null;
 
 // Edge-computing cache: keep forecast history on-device so offline predictions run in-browser.
 function idbTransactionDone(transaction) {
@@ -420,6 +419,57 @@ async function getLiveCameraModule() {
     ]);
   }
   return liveCameraModulePromise;
+}
+
+async function getWeatherMapModule() {
+  if (!weatherMapModulePromise) {
+    weatherMapModulePromise = importModuleCandidates([
+      "/js/weatherMap.js",
+      "/frontend/js/weatherMap.js",
+      "/static/js/weatherMap.js",
+    ]);
+  }
+  return weatherMapModulePromise;
+}
+
+async function initializeWeatherMapController() {
+  if (state.weatherMapController) {
+    await state.weatherMapController.updateContext({
+      apiBase: state.apiBase,
+      staticMode: state.staticMode,
+      forceTileReload: true,
+    });
+    return;
+  }
+
+  const mapContainer = document.getElementById("weatherMap");
+  if (!mapContainer) return;
+
+  try {
+    const module = await getWeatherMapModule();
+    state.weatherMapController = module.createWeatherMapController({
+      containerId: "weatherMap",
+      apiBase: state.apiBase,
+      staticMode: state.staticMode,
+      builtinApiKeys: BUILTIN_API_KEYS,
+      getApiKey: () => el.apiKeyInput?.value?.trim() || "",
+      playButtonId: "mapPlayBtn",
+      pauseButtonId: "mapPauseBtn",
+      hourSliderId: "mapTimeSlider",
+      hourLabelId: "mapHourLabel",
+      stormIndicatorId: "mapStormIndicator",
+      stormListId: "mapStormList",
+      onStatus: (text, tone) => setStatus(text, tone),
+      onLocationSelected: ({ latitude, longitude }) => {
+        state.coords = { latitude: Number(latitude), longitude: Number(longitude) };
+        localStorage.setItem(LAST_COORDS_KEY, JSON.stringify(state.coords));
+        void loadPlatformBundle({ latitude: state.coords.latitude, longitude: state.coords.longitude });
+      },
+    });
+    await state.weatherMapController.init();
+  } catch (error) {
+    setStatus(`Map module unavailable: ${error.message}`, "error");
+  }
 }
 
 async function importModuleCandidates(candidates) {
@@ -1375,6 +1425,14 @@ function applyBundle(bundle, options = {}) {
   renderAlerts(state.alerts);
   renderAiSummary(bundle.aiSummary);
   addFavorite((state.current.location || "").split(",")[0]);
+  if (state.weatherMapController) {
+    void state.weatherMapController.updateContext({ apiBase: state.apiBase, staticMode: state.staticMode });
+    state.weatherMapController.setFocusLocation({
+      latitude: state.coords?.latitude,
+      longitude: state.coords?.longitude,
+      label: state.current?.location || "Selected location",
+    });
+  }
   void loadClimateInsights();
 }
 
@@ -2364,6 +2422,9 @@ function setupSectionNavigation() {
     if (section === "analytics" && state.analytics) {
       requestAnimationFrame(() => renderAnalytics());
     }
+    if (section === "maps" && state.weatherMapController) {
+      requestAnimationFrame(() => state.weatherMapController.invalidateSize());
+    }
     if (isMobileNavViewport()) closeSidebarNav();
   });
 }
@@ -2603,64 +2664,6 @@ async function saveCurrentCityToServer() {
     // silent
   }
 }
-async function initMap() {
-  const mapContainer = document.getElementById("map");
-  if (typeof L === "undefined" || !mapContainer) return;
-  state.map = L.map("map", { zoomControl: true }).setView([22.9, 79.5], 4);
-
-  const base = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    attribution: "&copy; OpenStreetMap contributors",
-  }).addTo(state.map);
-
-  const overlays = {};
-  try {
-    let layers = {};
-    if (state.staticMode) {
-      const key = (el.apiKeyInput.value.trim() || BUILTIN_API_KEYS[0] || "").trim();
-      if (key) {
-        layers = {
-          temperature: `https://tile.openweathermap.org/map/temp_new/{z}/{x}/{y}.png?appid=${key}`,
-          rain: `https://tile.openweathermap.org/map/precipitation_new/{z}/{x}/{y}.png?appid=${key}`,
-          wind: `https://tile.openweathermap.org/map/wind_new/{z}/{x}/{y}.png?appid=${key}`,
-          clouds: `https://tile.openweathermap.org/map/clouds_new/{z}/{x}/{y}.png?appid=${key}`,
-        };
-      }
-    } else {
-      const layerPayload = await apiRequest(`/api/map/layers?apiKey=${encodeURIComponent(el.apiKeyInput.value.trim())}`);
-      layers = layerPayload.layers || {};
-    }
-    if (layers.temperature) overlays.Temperature = L.tileLayer(layers.temperature, { opacity: 0.55 });
-    if (layers.rain) overlays.Rain = L.tileLayer(layers.rain, { opacity: 0.55 });
-    if (layers.wind) overlays.Wind = L.tileLayer(layers.wind, { opacity: 0.55 });
-    if (layers.clouds) overlays.Clouds = L.tileLayer(layers.clouds, { opacity: 0.55 });
-  } catch {
-    // optional
-  }
-
-  L.control.layers({ OpenStreetMap: base }, overlays).addTo(state.map);
-
-  state.map.on("click", async (event) => {
-    if (!el.mapSelection) return;
-    const latitude = event.latlng.lat;
-    const longitude = event.latlng.lng;
-    el.mapSelection.innerHTML = `<div class="list-item">Loading weather for ${latitude.toFixed(3)}, ${longitude.toFixed(3)}...</div>`;
-    const loaded = await loadPlatformBundle({ latitude, longitude });
-    if (loaded && state.current) {
-      el.mapSelection.innerHTML = `<div class="list-item">Loaded ${state.current.location} at ${latitude.toFixed(3)}, ${longitude.toFixed(3)}.</div>`;
-      return;
-    }
-    el.mapSelection.innerHTML = `<div class="list-item">Could not fetch weather for ${latitude.toFixed(3)}, ${longitude.toFixed(3)}. Try again.</div>`;
-  });
-}
-
-function syncMapMarker() {
-  if (!state.map || !state.coords) return;
-  if (state.focusMarker) state.map.removeLayer(state.focusMarker);
-  state.focusMarker = L.marker([state.coords.latitude, state.coords.longitude]).addTo(state.map);
-  state.focusMarker.bindPopup(state.current?.location || "Selected location").openPopup();
-  state.map.setView([state.coords.latitude, state.coords.longitude], Math.max(state.map.getZoom(), 6));
-}
-
 async function detectLocation() {
   if (navigator.geolocation) {
     try {
@@ -2742,6 +2745,14 @@ async function fetchConfig() {
 }
 
 function setupPwa() {
+  if (!el.installBtn) return;
+
+  if (el.installBtn) {
+    el.installBtn.hidden = false;
+    el.installBtn.disabled = true;
+    el.installBtn.textContent = "Install App";
+  }
+
   if ("caches" in window) {
     const activeCaches = new Set([PWA_CACHE_NAME, `${PWA_CACHE_NAME}-ui`, `${PWA_CACHE_NAME}-data`]);
     caches
@@ -2761,14 +2772,24 @@ function setupPwa() {
   window.addEventListener("beforeinstallprompt", (event) => {
     event.preventDefault();
     state.deferredPrompt = event;
-    el.installBtn.hidden = false;
+    if (el.installBtn) el.installBtn.disabled = false;
+  });
+  window.addEventListener("appinstalled", () => {
+    state.deferredPrompt = null;
+    if (el.installBtn) {
+      el.installBtn.disabled = true;
+      el.installBtn.textContent = "App Installed";
+    }
   });
   el.installBtn.addEventListener("click", async () => {
-    if (!state.deferredPrompt) return;
+    if (!state.deferredPrompt) {
+      setStatus("Install prompt not available yet. Keep using the app and try again.", "error");
+      return;
+    }
     state.deferredPrompt.prompt();
     await state.deferredPrompt.userChoice;
     state.deferredPrompt = null;
-    el.installBtn.hidden = true;
+    el.installBtn.disabled = true;
   });
 }
 
@@ -2861,6 +2882,11 @@ function wireEvents() {
     void applySelectedLanguage();
     if (state.current) void loadPlatformBundle(locationPayload());
   });
+  el.apiKeyInput.addEventListener("change", () => {
+    if (state.weatherMapController) {
+      void state.weatherMapController.updateContext({ forceTileReload: true, apiBase: state.apiBase, staticMode: state.staticMode });
+    }
+  });
 }
 
 function capitalize(value) {
@@ -2894,6 +2920,7 @@ async function initialize() {
   setupPwa();
   setupConnectivityWatchers();
   wireEvents();
+  await initializeWeatherMapController();
   initializeLiveCameraUi();
   await applySelectedLanguage();
   await cleanupExpiredWeatherHistory();

@@ -248,6 +248,69 @@ class WeatherService:
             "clouds": f"https://tile.openweathermap.org/map/clouds_new/{{z}}/{{x}}/{{y}}.png?appid={key}",
         }
 
+    def fetch_map_weather_data(self, latitude: float, longitude: float, hour_offset: int = 0) -> dict[str, Any]:
+        safe_latitude = max(-90.0, min(90.0, float(latitude)))
+        safe_longitude = ((float(longitude) + 180.0) % 360.0) - 180.0
+        safe_hour_offset = max(0, min(int(hour_offset), 72))
+
+        cache_key = f"map-weather::{safe_latitude:.3f}:{safe_longitude:.3f}:{safe_hour_offset}"
+        cached = self.cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        payload = self._get_json(
+            OPEN_METEO_FORECAST_URL,
+            {
+                "latitude": safe_latitude,
+                "longitude": safe_longitude,
+                "hourly": "temperature_2m,relative_humidity_2m,wind_speed_10m,wind_direction_10m,precipitation_probability,cloud_cover,precipitation",
+                "forecast_days": 4,
+                "wind_speed_unit": "kmh",
+                "timezone": "UTC",
+            },
+        )
+
+        hourly = payload.get("hourly") or {}
+        times = hourly.get("time") or []
+        if not times:
+            raise ValueError("Upstream API request failed: missing hourly weather map data.")
+
+        idx = self._nearest_hour_index(times, safe_hour_offset)
+
+        temperature = self._series_value(hourly.get("temperature_2m"), idx)
+        humidity = self._series_value(hourly.get("relative_humidity_2m"), idx)
+        wind_speed = self._series_value(hourly.get("wind_speed_10m"), idx)
+        wind_direction = self._series_value(hourly.get("wind_direction_10m"), idx)
+        rain_probability = self._series_value(hourly.get("precipitation_probability"), idx)
+        cloud_cover = self._series_value(hourly.get("cloud_cover"), idx)
+        precipitation = self._series_value(hourly.get("precipitation"), idx)
+
+        is_storm = bool((wind_speed or 0) > 50 and (rain_probability or 0) > 70)
+        if is_storm or (wind_speed or 0) > 65 or (rain_probability or 0) > 85:
+            storm_risk = "high"
+        elif (wind_speed or 0) > 40 or (rain_probability or 0) > 55:
+            storm_risk = "medium"
+        else:
+            storm_risk = "low"
+
+        output = {
+            "latitude": safe_latitude,
+            "longitude": safe_longitude,
+            "forecastHourOffset": safe_hour_offset,
+            "timeUtc": self._to_utc_iso(times[idx]),
+            "temperature": temperature,
+            "humidity": humidity,
+            "windSpeed": wind_speed,
+            "windDirection": wind_direction,
+            "rainProbability": rain_probability,
+            "cloudCoverage": cloud_cover,
+            "precipitation": precipitation,
+            "stormRisk": storm_risk,
+            "isStorm": is_storm,
+        }
+        self.cache.set(cache_key, output, ttl_seconds=max(120, self.settings.cache_ttl_seconds // 2))
+        return output
+
     def _fetch_current(self, params: dict[str, Any], units: str, custom_key: str = "") -> dict[str, Any]:
         attempts: list[str] = []
         keys = self.candidate_api_keys(custom_key)
@@ -363,6 +426,50 @@ class WeatherService:
             return "--"
         local_timestamp = int(unix_ts) + int(timezone_offset)
         return dt.datetime.utcfromtimestamp(local_timestamp).strftime("%H:%M")
+
+    @staticmethod
+    def _series_value(series: Any, index: int) -> float | None:
+        if not isinstance(series, list) or not series:
+            return None
+        safe_index = max(0, min(index, len(series) - 1))
+        value = series[safe_index]
+        if value is None:
+            return None
+        return float(value)
+
+    @staticmethod
+    def _to_utc_iso(value: Any) -> str:
+        text = str(value or "").strip()
+        if not text:
+            return dt.datetime.utcnow().isoformat(timespec="seconds") + "Z"
+        parsed = WeatherService._parse_open_meteo_time(text)
+        return parsed.isoformat(timespec="seconds") + "Z"
+
+    @staticmethod
+    def _nearest_hour_index(times: list[Any], hour_offset: int) -> int:
+        if not times:
+            return 0
+        now_hour = dt.datetime.utcnow().replace(minute=0, second=0, microsecond=0)
+        target = now_hour + dt.timedelta(hours=max(0, hour_offset))
+        nearest_idx = 0
+        nearest_delta = None
+        for idx, item in enumerate(times):
+            parsed = WeatherService._parse_open_meteo_time(str(item))
+            delta = abs((parsed - target).total_seconds())
+            if nearest_delta is None or delta < nearest_delta:
+                nearest_delta = delta
+                nearest_idx = idx
+        return nearest_idx
+
+    @staticmethod
+    def _parse_open_meteo_time(value: str) -> dt.datetime:
+        text = (value or "").strip()
+        if not text:
+            return dt.datetime.utcnow().replace(minute=0, second=0, microsecond=0)
+        parsed = dt.datetime.fromisoformat(text.replace("Z", "+00:00"))
+        if parsed.tzinfo is not None:
+            return parsed.astimezone(dt.timezone.utc).replace(tzinfo=None)
+        return parsed
 
     @staticmethod
     def _normalize_daily(daily: dict[str, Any]) -> list[dict[str, Any]]:

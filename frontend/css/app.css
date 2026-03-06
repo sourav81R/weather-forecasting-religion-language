@@ -901,6 +901,211 @@ select:focus,
   display: none;
 }
 
+.weather-map-card {
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+}
+
+.weather-map-card:hover {
+  transform: none;
+}
+
+.weather-map-toolbar {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 10px;
+  align-items: stretch;
+}
+
+.weather-map-controls,
+.weather-map-alerts {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--panel-solid) 92%, transparent);
+  padding: 10px;
+}
+
+.weather-map-controls {
+  display: grid;
+  grid-template-columns: auto auto minmax(140px, 1fr);
+  gap: 10px;
+  align-items: center;
+}
+
+.weather-map-controls input[type="range"] {
+  min-height: 36px;
+  padding: 0;
+}
+
+.weather-map-hour {
+  margin: 0;
+  grid-column: 1 / -1;
+}
+
+.weather-map-alerts h3 {
+  margin: 0 0 6px;
+  font-size: 15px;
+}
+
+.weather-map-alerts p {
+  margin: 0;
+}
+
+.weather-map-canvas {
+  width: 100%;
+  min-height: clamp(360px, 55vh, 620px);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 14% 12%, rgba(31, 111, 255, 0.18), transparent 46%),
+    radial-gradient(circle at 88% 86%, rgba(0, 184, 164, 0.14), transparent 40%),
+    color-mix(in srgb, var(--panel-solid) 86%, transparent);
+}
+
+.weather-map-footer {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 10px;
+}
+
+.weather-map-legend {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--panel-solid) 92%, transparent);
+  padding: 10px;
+}
+
+.weather-map-legend strong {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+.legend-row {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.legend-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.legend-light {
+  background: #2f86e0;
+}
+
+.legend-moderate {
+  background: #3eb86a;
+}
+
+.legend-heavy {
+  background: #f1c548;
+  color: #123;
+}
+
+.legend-storm {
+  background: #de4030;
+}
+
+.storm-list {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--panel-solid) 92%, transparent);
+  padding: 8px;
+  display: grid;
+  gap: 7px;
+}
+
+.storm-list-item {
+  border: 1px solid color-mix(in srgb, var(--line) 84%, var(--danger) 16%);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--panel-solid) 95%, transparent);
+  padding: 7px 8px;
+  display: grid;
+  gap: 2px;
+}
+
+.storm-list-item strong {
+  font-size: 13px;
+}
+
+.storm-list-item span {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.leaflet-container {
+  font-family: var(--font-ui);
+  background: color-mix(in srgb, var(--panel-solid) 85%, transparent);
+}
+
+.leaflet-control-layers {
+  border-radius: 12px !important;
+  border: 1px solid var(--line) !important;
+  box-shadow: var(--shadow);
+}
+
+.leaflet-control-layers label {
+  font-weight: 600;
+}
+
+.weather-storm-marker span {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(227, 75, 61, 0.9);
+  box-shadow: 0 8px 18px rgba(227, 75, 61, 0.35);
+  color: #fff;
+  font-size: 16px;
+}
+
+.map-inspector-popup h4 {
+  margin: 0 0 4px;
+}
+
+.map-inspector-location {
+  margin: 0 0 8px;
+  color: #56718f;
+  font-size: 12px;
+}
+
+.map-inspector-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.map-inspector-grid div {
+  border: 1px solid #d5e2f0;
+  border-radius: 8px;
+  padding: 6px;
+  background: #f7fbff;
+}
+
+.map-inspector-grid span {
+  display: block;
+  font-size: 11px;
+  color: #6784a2;
+}
+
+.map-inspector-grid strong {
+  font-size: 13px;
+}
+
 .chatbot {
   padding: 16px;
 }
@@ -1025,8 +1230,18 @@ select:focus,
   .cols-2,
   .cols-3,
   .form-grid,
-  .camera-controls {
+  .camera-controls,
+  .weather-map-toolbar,
+  .weather-map-footer {
     grid-template-columns: 1fr;
+  }
+
+  .weather-map-controls {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .weather-map-controls input[type="range"] {
+    grid-column: 1 / -1;
   }
 
   #analytics .card canvas {
@@ -1067,6 +1282,14 @@ select:focus,
   .card,
   .chatbot {
     padding: 12px;
+  }
+
+  .weather-map-card {
+    padding: 12px;
+  }
+
+  .weather-map-canvas {
+    min-height: 340px;
   }
 
   .nav {

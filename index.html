@@ -9,7 +9,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/frontend/css/app.css?v=20260306-14">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="/frontend/css/app.css?v=20260306-15">
 </head>
 <body>
   <div class="app-shell" id="appShell">
@@ -38,10 +39,11 @@
         <button class="nav-btn" data-section="analytics">Analytics</button>
         <button class="nav-btn" data-section="planner">Planner</button>
         <button class="nav-btn" data-section="alerts">Alerts</button>
+        <button class="nav-btn" data-section="maps">Maps</button>
         <button class="nav-btn" data-section="settings">Settings</button>
       </nav>
       <div class="install-wrap">
-        <button id="installBtn" class="ghost-btn" type="button" hidden>Install App</button>
+        <button id="installBtn" class="ghost-btn" type="button">Install App</button>
       </div>
     </aside>
 
@@ -245,6 +247,42 @@
         </article>
       </section>
 
+      <section id="maps" class="section">
+        <div class="section-head">
+          <h2 class="section-title">Live Weather Map</h2>
+          <p class="section-subtitle">Interactive global map with wind animation, radar intensity, cloud cover, and storm alerts.</p>
+        </div>
+        <article class="panel card weather-map-card">
+          <div class="weather-map-toolbar">
+            <div class="weather-map-controls">
+              <button id="mapPlayBtn" class="primary-btn" type="button">Play</button>
+              <button id="mapPauseBtn" class="ghost-btn" type="button">Pause</button>
+              <input id="mapTimeSlider" type="range" min="0" max="47" value="0" aria-label="Forecast hour selection">
+              <p id="mapHourLabel" class="muted weather-map-hour">Forecast +0h</p>
+            </div>
+            <div class="weather-map-alerts">
+              <h3>Storm Alerts</h3>
+              <p id="mapStormIndicator" class="summary">No active storm cells detected.</p>
+            </div>
+          </div>
+          <div id="weatherMap" class="weather-map-canvas" aria-label="Live weather map"></div>
+          <div class="weather-map-footer">
+            <div class="weather-map-legend">
+              <strong>Radar Intensity</strong>
+              <div class="legend-row">
+                <span class="legend-chip legend-light">Light Rain</span>
+                <span class="legend-chip legend-moderate">Moderate</span>
+                <span class="legend-chip legend-heavy">Heavy</span>
+                <span class="legend-chip legend-storm">Storm</span>
+              </div>
+            </div>
+            <div id="mapStormList" class="storm-list">
+              <div class="storm-list-item">No storm alerts in the sampled region.</div>
+            </div>
+          </div>
+        </article>
+      </section>
+
       <section id="settings" class="section">
         <div class="section-head">
           <h2 class="section-title">Account & Preferences</h2>
@@ -289,7 +327,9 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <script src="/frontend/js/app.js?v=20260306-14"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet-velocity/dist/leaflet-velocity.min.js"></script>
+  <script src="/frontend/js/app.js?v=20260306-15"></script>
 </body>
 </html>
 
