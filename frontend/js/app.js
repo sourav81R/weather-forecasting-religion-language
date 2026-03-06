@@ -1,5 +1,4 @@
 const CACHE_KEY = "weather-studio-cache-v2";
-const PWA_CACHE_NAME = "weather-studio-pwa-v27";
 const FAVORITES_KEY = "weather-studio-favorites-v2";
 const LAST_COORDS_KEY = "weather-studio-last-coords-v2";
 const WEATHER_HISTORY_DB_NAME = "weather-studio-history-v1";
@@ -512,6 +511,13 @@ function setLiveCameraStatus(text, tone = "") {
   const message = String(text || "");
   el.liveCameraStatus.textContent = message;
   el.liveCameraStatus.style.color = tone === "error" ? "#d13a4d" : tone === "success" ? "#179d84" : "";
+}
+
+function isSecureLiveCameraContext() {
+  if (typeof window === "undefined") return true;
+  if (window.isSecureContext) return true;
+  const hostname = String(window.location?.hostname || "").toLowerCase();
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
 }
 
 function setLiveScanButtonLabel(scanning) {
@@ -2407,6 +2413,9 @@ async function ensureLiveCameraController() {
 
 function initializeLiveCameraUi() {
   if (!el.liveCameraStartBtn || !el.liveCameraVideo || !el.liveCameraCanvas) return;
+  if (el.skyImageInput) {
+    el.skyImageInput.setAttribute("capture", "environment");
+  }
   const supported = Boolean(navigator?.mediaDevices?.getUserMedia);
   if (!supported) {
     el.liveCameraStartBtn.disabled = true;
@@ -2414,6 +2423,14 @@ function initializeLiveCameraUi() {
     if (el.liveCameraCaptureBtn) el.liveCameraCaptureBtn.disabled = true;
     if (el.liveCameraScanBtn) el.liveCameraScanBtn.disabled = true;
     setLiveCameraStatus("Live camera is unavailable in this browser. Use file upload as fallback.", "error");
+    return;
+  }
+  if (!isSecureLiveCameraContext()) {
+    el.liveCameraStartBtn.disabled = true;
+    if (el.liveCameraStopBtn) el.liveCameraStopBtn.disabled = true;
+    if (el.liveCameraCaptureBtn) el.liveCameraCaptureBtn.disabled = true;
+    if (el.liveCameraScanBtn) el.liveCameraScanBtn.disabled = true;
+    setLiveCameraStatus("Live camera needs HTTPS on mobile. Open this app using https:// and retry.", "error");
     return;
   }
   setLiveCameraStatus("Use Start Camera to begin live sky scanning.");
@@ -2429,8 +2446,9 @@ async function startLiveCamera() {
     setLiveCameraStatus("Camera started. Point to sky and capture.");
     setStatus("Live camera ready.", "success");
   } catch (error) {
-    setLiveCameraStatus(`Camera error: ${error.message}`, "error");
-    setStatus(error.message, "error");
+    const message = String(error?.message || "Unable to start camera.");
+    setLiveCameraStatus(`Camera error: ${message}`, "error");
+    setStatus(message, "error");
   } finally {
     setLiveCameraButtons();
   }
@@ -2665,21 +2683,45 @@ async function askChatbot() {
   }
 }
 
+function activateSection(sectionId) {
+  const section = String(sectionId || "").trim();
+  if (!section) return;
+  const sectionElement = document.getElementById(section);
+  if (!sectionElement) return;
+
+  document.querySelectorAll(".nav-btn").forEach((btn) => btn.classList.remove("is-active"));
+  document.querySelector(`.nav-btn[data-section="${section}"]`)?.classList.add("is-active");
+  document.querySelectorAll(".section").forEach((item) => item.classList.remove("is-active"));
+  sectionElement.classList.add("is-active");
+
+  if (section === "analytics" && state.analytics) {
+    requestAnimationFrame(() => renderAnalytics());
+  }
+  if (section === "maps" && state.weatherMapController) {
+    requestAnimationFrame(() => state.weatherMapController.invalidateSize());
+  }
+}
+
+function redirectToWeatherOverviewOnMobile() {
+  if (!isMobileNavViewport()) return;
+  activateSection("dashboard");
+  closeSidebarNav();
+  const overviewTarget = document.querySelector("#dashboard .section-head") || document.getElementById("dashboard");
+  if (!overviewTarget) return;
+  requestAnimationFrame(() => {
+    try {
+      overviewTarget.scrollIntoView({ behavior: "smooth", block: "start" });
+    } catch {
+      overviewTarget.scrollIntoView();
+    }
+  });
+}
+
 function setupSectionNavigation() {
   el.nav.addEventListener("click", (event) => {
     const target = event.target.closest(".nav-btn");
     if (!target) return;
-    const section = target.getAttribute("data-section");
-    document.querySelectorAll(".nav-btn").forEach((btn) => btn.classList.remove("is-active"));
-    target.classList.add("is-active");
-    document.querySelectorAll(".section").forEach((item) => item.classList.remove("is-active"));
-    document.getElementById(section)?.classList.add("is-active");
-    if (section === "analytics" && state.analytics) {
-      requestAnimationFrame(() => renderAnalytics());
-    }
-    if (section === "maps" && state.weatherMapController) {
-      requestAnimationFrame(() => state.weatherMapController.invalidateSize());
-    }
+    activateSection(target.getAttribute("data-section"));
     if (isMobileNavViewport()) closeSidebarNav();
   });
 }
@@ -2739,7 +2781,7 @@ function ensureSeparateLiveScannerCard() {
   const liveScannerCard = document.createElement("article");
   liveScannerCard.className = "panel card live-scanner-card";
   liveScannerCard.innerHTML = `<h2>Live Sky Scanner</h2>`;
-  skyCard.insertAdjacentElement("afterend", liveScannerCard);
+  skyCard.insertAdjacentElement("beforebegin", liveScannerCard);
   liveScannerCard.appendChild(liveCameraBlock);
 
   const nestedLiveTitle = liveCameraBlock.querySelector("h3");
@@ -3022,50 +3064,157 @@ async function fetchConfig() {
 
 function setupPwa() {
   if (!el.installBtn) return;
-
-  if (el.installBtn) {
+  const isIosDevice = () => /iphone|ipad|ipod/.test(String(navigator?.userAgent || "").toLowerCase());
+  const isAndroidDevice = () => String(navigator?.userAgent || "").toLowerCase().includes("android");
+  let pendingSwUpdate = null;
+  let reloadingForUpdate = false;
+  const installContextSecure = () => {
+    if (typeof window === "undefined") return true;
+    if (window.isSecureContext) return true;
+    const hostname = String(window.location?.hostname || "").toLowerCase();
+    return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+  };
+  const isStandaloneInstalled = () => {
+    if (typeof window === "undefined") return false;
+    const displayStandalone = typeof window.matchMedia === "function" && window.matchMedia("(display-mode: standalone)").matches;
+    const iosStandalone = Boolean(window.navigator?.standalone);
+    return displayStandalone || iosStandalone;
+  };
+  const setInstallButton = (text, disabled = false) => {
     el.installBtn.hidden = false;
-    el.installBtn.disabled = true;
-    el.installBtn.textContent = "Install App";
-  }
+    el.installBtn.disabled = Boolean(disabled);
+    el.installBtn.textContent = String(text || "Install App");
+  };
+  const setUpdateButton = () => {
+    setInstallButton("Update App", false);
+  };
+  const markUpdateReady = (registration) => {
+    if (!registration?.waiting) return;
+    if (!navigator.serviceWorker?.controller) return;
+    pendingSwUpdate = registration.waiting;
+    setUpdateButton();
+    setStatus("A new app update is available. Tap Update App to refresh.", "success");
+  };
+  const activatePendingUpdate = () => {
+    if (!pendingSwUpdate) return false;
+    setInstallButton("Updating...", true);
+    setStatus("Applying latest update...");
+    pendingSwUpdate.postMessage({ type: "SKIP_WAITING" });
+    return true;
+  };
+  const waitForInstallPrompt = (timeoutMs = 1800) =>
+    new Promise((resolve) => {
+      if (state.deferredPrompt) {
+        resolve(true);
+        return;
+      }
+      const started = Date.now();
+      const poll = () => {
+        if (state.deferredPrompt) {
+          resolve(true);
+          return;
+        }
+        if (Date.now() - started >= timeoutMs) {
+          resolve(false);
+          return;
+        }
+        window.setTimeout(poll, 120);
+      };
+      poll();
+    });
+  const fallbackInstallMessage = () => {
+    if (isStandaloneInstalled()) return "App is already installed.";
+    if (!installContextSecure()) return "Install requires HTTPS on mobile. Open this app with https:// and try again.";
+    if (isIosDevice()) return "On iPhone/iPad, open Share and tap Add to Home Screen.";
+    if (isAndroidDevice()) return "On Android, open browser menu and tap Install app or Add to Home screen.";
+    return "On desktop, open browser menu and choose Install app.";
+  };
 
-  if ("caches" in window) {
-    const activeCaches = new Set([PWA_CACHE_NAME, `${PWA_CACHE_NAME}-ui`, `${PWA_CACHE_NAME}-data`]);
-    caches
-      .keys()
-      .then((keys) =>
-        Promise.all(keys.filter((key) => key.startsWith("weather-studio-pwa-") && !activeCaches.has(key)).map((key) => caches.delete(key)))
-      )
-      .catch(() => {});
+  const installedAtLoad = isStandaloneInstalled();
+  if (installedAtLoad) {
+    setInstallButton("App Installed", true);
+  } else {
+    setInstallButton("Install App", true);
   }
 
   if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (reloadingForUpdate) return;
+      if (!pendingSwUpdate) return;
+      reloadingForUpdate = true;
+      window.location.reload();
+    });
     navigator.serviceWorker
       .register("/service-worker.js")
-      .then((registration) => registration.update().catch(() => {}))
-      .catch(() => {});
+      .then((registration) => {
+        markUpdateReady(registration);
+        registration.addEventListener("updatefound", () => {
+          const installingWorker = registration.installing;
+          if (!installingWorker) return;
+          installingWorker.addEventListener("statechange", () => {
+            if (installingWorker.state === "installed") {
+              markUpdateReady(registration);
+            }
+          });
+        });
+        return registration.update().catch(() => {});
+      })
+      .catch(() => {
+        setStatus("Service worker registration failed. Install may be unavailable.", "error");
+      })
+      .finally(() => {
+        if (!isStandaloneInstalled() && !pendingSwUpdate) setInstallButton("Install App", false);
+      });
+  } else {
+    setInstallButton("Install App", false);
   }
   window.addEventListener("beforeinstallprompt", (event) => {
     event.preventDefault();
     state.deferredPrompt = event;
-    if (el.installBtn) el.installBtn.disabled = false;
+    if (!pendingSwUpdate) setInstallButton("Install App", false);
   });
   window.addEventListener("appinstalled", () => {
     state.deferredPrompt = null;
-    if (el.installBtn) {
-      el.installBtn.disabled = true;
-      el.installBtn.textContent = "App Installed";
-    }
+    setInstallButton("App Installed", true);
+    setStatus("App installed successfully.", "success");
   });
   el.installBtn.addEventListener("click", async () => {
-    if (!state.deferredPrompt) {
-      setStatus("Install prompt not available yet. Keep using the app and try again.", "error");
+    if (activatePendingUpdate()) return;
+    if (isStandaloneInstalled()) {
+      setInstallButton("App Installed", true);
+      setStatus("App is already installed.", "success");
       return;
     }
-    state.deferredPrompt.prompt();
-    await state.deferredPrompt.userChoice;
-    state.deferredPrompt = null;
-    el.installBtn.disabled = true;
+    if (!state.deferredPrompt) {
+      const promptReady = await waitForInstallPrompt();
+      if (!promptReady) {
+        setStatus(fallbackInstallMessage());
+        return;
+      }
+    }
+    try {
+      const installPrompt = state.deferredPrompt;
+      if (!installPrompt) {
+        setStatus(fallbackInstallMessage());
+        return;
+      }
+      installPrompt.prompt();
+      const choice = await installPrompt.userChoice;
+      if (choice?.outcome === "dismissed") {
+        setStatus("Install prompt dismissed.");
+      }
+    } catch {
+      setStatus(fallbackInstallMessage());
+    } finally {
+      state.deferredPrompt = null;
+      if (isStandaloneInstalled()) {
+        setInstallButton("App Installed", true);
+      } else if (pendingSwUpdate) {
+        setUpdateButton();
+      } else {
+        setInstallButton("Install App", false);
+      }
+    }
   });
 }
 
@@ -3109,6 +3258,7 @@ function wireEvents() {
       setStatus("Enter a city name.", "error");
       return;
     }
+    redirectToWeatherOverviewOnMobile();
     void loadPlatformBundle({ city });
   });
   el.cityInput.addEventListener("keydown", (event) => {

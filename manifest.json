@@ -1,21 +1,26 @@
 {
+  "id": "/",
   "name": "Regional Weather Studio",
   "short_name": "Weather Studio",
   "description": "AI-powered weather intelligence platform with analytics, maps, planners, and alerts.",
+  "scope": "/",
   "start_url": "/",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
   "background_color": "#071525",
   "theme_color": "#0a223f",
   "icons": [
     {
       "src": "/components/icon-192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     },
     {
       "src": "/components/icon-512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     }
   ]
 }
