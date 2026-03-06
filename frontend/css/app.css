@@ -1106,6 +1106,31 @@ select:focus,
   font-size: 13px;
 }
 
+.map-inspector-loading {
+  margin: 8px 0 0;
+  color: #56718f;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.map-inspector-hyperlocal {
+  margin-top: 9px;
+  padding-top: 8px;
+  border-top: 1px dashed #c7d7ea;
+}
+
+.map-inspector-hyperlocal h5 {
+  margin: 0 0 6px;
+  font-size: 13px;
+  letter-spacing: 0.2px;
+}
+
+.map-inspector-sources {
+  margin: 7px 0 0;
+  font-size: 11px;
+  color: #56718f;
+}
+
 .chatbot {
   padding: 16px;
 }
