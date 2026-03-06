@@ -1667,18 +1667,42 @@ async function askChatbot() {
   }
 }
 
+function activateSection(sectionId) {
+  const section = String(sectionId || "").trim();
+  if (!section) return;
+  const sectionElement = document.getElementById(section);
+  if (!sectionElement) return;
+
+  document.querySelectorAll(".nav-btn").forEach((btn) => btn.classList.remove("is-active"));
+  document.querySelector(`.nav-btn[data-section="${section}"]`)?.classList.add("is-active");
+  document.querySelectorAll(".section").forEach((item) => item.classList.remove("is-active"));
+  sectionElement.classList.add("is-active");
+
+  if (section === "analytics" && state.analytics) {
+    requestAnimationFrame(() => renderAnalytics());
+  }
+}
+
+function redirectToWeatherOverviewOnMobile() {
+  if (!isMobileNavViewport()) return;
+  activateSection("dashboard");
+  closeSidebarNav();
+  const overviewTarget = document.querySelector("#dashboard .section-head") || document.getElementById("dashboard");
+  if (!overviewTarget) return;
+  requestAnimationFrame(() => {
+    try {
+      overviewTarget.scrollIntoView({ behavior: "smooth", block: "start" });
+    } catch {
+      overviewTarget.scrollIntoView();
+    }
+  });
+}
+
 function setupSectionNavigation() {
   el.nav.addEventListener("click", (event) => {
     const target = event.target.closest(".nav-btn");
     if (!target) return;
-    const section = target.getAttribute("data-section");
-    document.querySelectorAll(".nav-btn").forEach((btn) => btn.classList.remove("is-active"));
-    target.classList.add("is-active");
-    document.querySelectorAll(".section").forEach((item) => item.classList.remove("is-active"));
-    document.getElementById(section)?.classList.add("is-active");
-    if (section === "analytics" && state.analytics) {
-      requestAnimationFrame(() => renderAnalytics());
-    }
+    activateSection(target.getAttribute("data-section"));
     if (isMobileNavViewport()) closeSidebarNav();
   });
 }
@@ -2121,6 +2145,7 @@ function wireEvents() {
       setStatus("Enter a city name.", "error");
       return;
     }
+    redirectToWeatherOverviewOnMobile();
     void loadPlatformBundle({ city });
   });
   el.cityInput.addEventListener("keydown", (event) => {
