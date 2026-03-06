@@ -39,6 +39,18 @@ function isSupported() {
   return Boolean(navigator?.mediaDevices?.getUserMedia);
 }
 
+function normalizeFacingMode(value) {
+  return String(value || "").toLowerCase() === "user" ? "user" : "environment";
+}
+
+function inferFacingModeFromText(value) {
+  const text = String(value || "").toLowerCase();
+  if (!text) return null;
+  if (/(rear|back|environment|world)/.test(text)) return "environment";
+  if (/(front|user|selfie|facetime)/.test(text)) return "user";
+  return null;
+}
+
 function isSecureCameraContext() {
   if (typeof window === "undefined") return true;
   if (window.isSecureContext) return true;
@@ -95,11 +107,98 @@ async function queryCameraPermissionState() {
   }
 }
 
-async function optimizeVideoTrack(track) {
+async function listVideoInputDevices() {
+  if (!navigator?.mediaDevices?.enumerateDevices) return [];
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    return devices.filter((device) => device.kind === "videoinput");
+  } catch {
+    return [];
+  }
+}
+
+function selectVideoDevice(devices, facingMode) {
+  const normalizedFacingMode = normalizeFacingMode(facingMode);
+  const matches = devices.filter((device) => inferFacingModeFromText(device?.label) === normalizedFacingMode);
+  if (matches.length) return matches[0];
+  return null;
+}
+
+function inferFacingModeFromTrack(track) {
+  if (!track) return null;
+  const settingsFacingMode = track.getSettings?.().facingMode;
+  return inferFacingModeFromText(settingsFacingMode) || inferFacingModeFromText(track.label);
+}
+
+function createConstraintsCandidates({ facingMode, deviceId } = {}) {
+  const normalizedFacingMode = normalizeFacingMode(facingMode);
+  const candidates = [];
+
+  if (deviceId) {
+    candidates.push({
+      video: {
+        deviceId: { exact: deviceId },
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+      },
+      audio: false,
+    });
+  }
+
+  candidates.push(
+    {
+      video: {
+        facingMode: { exact: normalizedFacingMode },
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+      },
+      audio: false,
+    },
+    {
+      video: {
+        facingMode: { ideal: normalizedFacingMode },
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+      },
+      audio: false,
+    },
+    {
+      video: {
+        facingMode: normalizedFacingMode,
+      },
+      audio: false,
+    },
+    { video: true, audio: false },
+  );
+
+  return candidates;
+}
+
+async function getUserMediaWithFallback(candidates) {
+  let stream = null;
+  let lastError = null;
+
+  for (const constraints of candidates) {
+    try {
+      stream = await navigator.mediaDevices.getUserMedia(constraints);
+      if (stream) break;
+    } catch (error) {
+      lastError = error;
+      const name = String(error?.name || "");
+      if (name === "NotAllowedError" || name === "SecurityError") {
+        break;
+      }
+    }
+  }
+
+  return { stream, lastError };
+}
+
+async function optimizeVideoTrack(track, facingMode = "environment") {
   if (!track || typeof track.applyConstraints !== "function") return;
   try {
     await track.applyConstraints({
-      facingMode: { ideal: "environment" },
+      facingMode: { ideal: normalizeFacingMode(facingMode) },
       width: { ideal: 1280 },
       height: { ideal: 720 },
     });
@@ -113,6 +212,8 @@ export class LiveCameraController {
     this.videoElement = options.videoElement || null;
     this.canvasElement = options.canvasElement || null;
     this.stream = null;
+    this.preferredFacingMode = normalizeFacingMode(options.preferredFacingMode);
+    this.activeFacingMode = null;
   }
 
   static isSupported() {
@@ -123,7 +224,11 @@ export class LiveCameraController {
     return Boolean(this.stream && this.stream.getTracks().some((track) => track.readyState === "live"));
   }
 
-  async start() {
+  getFacingMode() {
+    return this.activeFacingMode || this.preferredFacingMode;
+  }
+
+  async start(options = {}) {
     if (!isSupported()) {
       throw new Error("Live camera is not supported in this browser.");
     }
@@ -133,50 +238,43 @@ export class LiveCameraController {
 
     this.stop();
 
+    const facingMode = normalizeFacingMode(options.facingMode || this.preferredFacingMode);
+    this.preferredFacingMode = facingMode;
+
     const permissionState = await queryCameraPermissionState();
     if (permissionState === "denied") {
       throw normalizeCameraError({ name: "NotAllowedError", message: "Camera permission denied." });
     }
 
-    const constraintsCandidates = [
-      { video: true, audio: false },
-      {
-        video: {
-          facingMode: { ideal: "environment" },
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        },
-        audio: false,
-      },
-      {
-        video: {
-          facingMode: "environment",
-        },
-        audio: false,
-      },
-    ];
-
-    let stream = null;
-    let lastError = null;
-    for (const constraints of constraintsCandidates) {
-      try {
-        stream = await navigator.mediaDevices.getUserMedia(constraints);
-        if (stream) break;
-      } catch (error) {
-        lastError = error;
-        const name = String(error?.name || "");
-        if (name === "NotAllowedError" || name === "SecurityError") {
-          break;
-        }
-      }
-    }
+    const devices = await listVideoInputDevices();
+    const preferredDevice = selectVideoDevice(devices, facingMode);
+    let { stream, lastError } = await getUserMediaWithFallback(
+      createConstraintsCandidates({ facingMode, deviceId: preferredDevice?.deviceId }),
+    );
     if (!stream) {
       throw normalizeCameraError(lastError);
     }
 
+    let [videoTrack] = stream.getVideoTracks();
+    await optimizeVideoTrack(videoTrack, facingMode);
+
+    const inferredFacingMode = inferFacingModeFromTrack(videoTrack);
+    if (preferredDevice?.deviceId && inferredFacingMode && inferredFacingMode !== facingMode) {
+      const retry = await getUserMediaWithFallback(
+        createConstraintsCandidates({ facingMode, deviceId: preferredDevice.deviceId }),
+      );
+      if (retry.stream) {
+        stream.getTracks().forEach((track) => track.stop());
+        stream = retry.stream;
+        [videoTrack] = stream.getVideoTracks();
+        await optimizeVideoTrack(videoTrack, facingMode);
+      } else if (retry.lastError) {
+        lastError = retry.lastError;
+      }
+    }
+
     this.stream = stream;
-    const [videoTrack] = stream.getVideoTracks();
-    await optimizeVideoTrack(videoTrack);
+    this.activeFacingMode = inferFacingModeFromTrack(videoTrack) || inferFacingModeFromText(preferredDevice?.label) || facingMode;
     this.videoElement.srcObject = stream;
     this.videoElement.autoplay = true;
     this.videoElement.setAttribute("playsinline", "true");
@@ -192,6 +290,7 @@ export class LiveCameraController {
     return {
       width: Number(this.videoElement.videoWidth || 0),
       height: Number(this.videoElement.videoHeight || 0),
+      facingMode: this.activeFacingMode,
     };
   }
 
@@ -204,6 +303,12 @@ export class LiveCameraController {
       this.videoElement.pause();
       this.videoElement.srcObject = null;
     }
+    this.activeFacingMode = null;
+  }
+
+  async flip() {
+    const nextFacingMode = this.getFacingMode() === "user" ? "environment" : "user";
+    return this.start({ facingMode: nextFacingMode });
   }
 
   async captureFrame(options = {}) {
