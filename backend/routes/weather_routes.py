@@ -125,3 +125,23 @@ def dashboard():
 def map_layers():
     api_key = request.args.get("apiKey", "")
     return jsonify({"layers": weather_service.get_map_layers(api_key=api_key)})
+
+
+@bp.get("/map/weather-data")
+def map_weather_data():
+    try:
+        latitude = float(request.args.get("lat"))
+        longitude = float(request.args.get("lon"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "Valid lat and lon query parameters are required."}), 400
+
+    try:
+        hour_offset = int(request.args.get("hourOffset", "0"))
+    except ValueError:
+        return jsonify({"error": "hourOffset must be an integer."}), 400
+
+    try:
+        data = weather_service.fetch_map_weather_data(latitude=latitude, longitude=longitude, hour_offset=hour_offset)
+        return jsonify(data)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 502

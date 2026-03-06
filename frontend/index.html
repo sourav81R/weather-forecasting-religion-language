@@ -9,7 +9,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/app.css?v=20260306-10">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="/css/app.css?v=20260306-15">
 </head>
 <body>
   <div class="app-shell" id="appShell">
@@ -38,14 +39,16 @@
         <button class="nav-btn" data-section="analytics">Analytics</button>
         <button class="nav-btn" data-section="planner">Planner</button>
         <button class="nav-btn" data-section="alerts">Alerts</button>
+        <button class="nav-btn" data-section="maps">Maps</button>
         <button class="nav-btn" data-section="settings">Settings</button>
       </nav>
       <div class="install-wrap">
-        <button id="installBtn" class="ghost-btn" type="button" hidden>Install App</button>
+        <button id="installBtn" class="ghost-btn" type="button">Install App</button>
       </div>
     </aside>
 
     <main class="main-content">
+      <div id="offlineBanner" class="offline-banner" hidden>Offline Mode – Showing predicted forecast based on cached data</div>
       <header class="topbar panel">
         <div class="topbar-head-row">
           <div class="topbar-head">
@@ -114,6 +117,17 @@
             <div id="mlPredictionList" class="list">
               <div class="list-item">Load weather to generate ML prediction.</div>
             </div>
+          </article>
+
+          <article id="offlineForecastCard" class="panel card" hidden>
+            <h2>Offline Forecast</h2>
+            <div class="list">
+              <div class="list-item"><strong>Predicted Temperature</strong><div id="offlineForecastTemp">--</div></div>
+              <div class="list-item"><strong>Predicted Rain Chance</strong><div id="offlineForecastRain">--</div></div>
+              <div class="list-item"><strong>Predicted Wind</strong><div id="offlineForecastWind">--</div></div>
+              <div class="list-item"><strong>Trend Signals</strong><div id="offlineForecastTrend">--</div></div>
+            </div>
+            <p id="offlineForecastMeta" class="summary">Offline prediction metadata will appear here.</p>
           </article>
         </div>
       </section>
@@ -194,6 +208,22 @@
             <div id="skyAnalysisResult" class="list sky-analysis-list">
               <div class="list-item">Upload a sky photo to estimate cloud and rain risk.</div>
             </div>
+
+            <div class="live-camera-block">
+              <h3>Live Sky Scanner</h3>
+              <div class="camera-controls">
+                <button id="liveCameraStartBtn" class="primary-btn" type="button">Start Camera</button>
+                <button id="liveCameraStopBtn" class="ghost-btn" type="button" disabled>Stop Camera</button>
+                <button id="liveCameraCaptureBtn" class="primary-btn" type="button" disabled>Capture Sky</button>
+                <button id="liveCameraScanBtn" class="ghost-btn" type="button" disabled>Start Live Scan</button>
+              </div>
+              <p id="liveCameraStatus" class="muted">Start camera to scan the sky live. If camera is unavailable, use image upload.</p>
+              <video id="liveCameraVideo" class="sky-live-video" autoplay playsinline muted></video>
+              <canvas id="liveCameraCanvas" class="sky-live-canvas"></canvas>
+              <div id="liveSkyResult" class="list sky-analysis-list">
+                <div class="list-item">Live camera predictions will appear here.</div>
+              </div>
+            </div>
           </article>
         </div>
       </section>
@@ -214,6 +244,42 @@
             <button id="evaluateAlertsBtn" class="primary-btn" type="button">Evaluate Alerts</button>
           </div>
           <div id="alertList" class="list"></div>
+        </article>
+      </section>
+
+      <section id="maps" class="section">
+        <div class="section-head">
+          <h2 class="section-title">Live Weather Map</h2>
+          <p class="section-subtitle">Interactive global map with wind animation, radar intensity, cloud cover, and storm alerts.</p>
+        </div>
+        <article class="panel card weather-map-card">
+          <div class="weather-map-toolbar">
+            <div class="weather-map-controls">
+              <button id="mapPlayBtn" class="primary-btn" type="button">Play</button>
+              <button id="mapPauseBtn" class="ghost-btn" type="button">Pause</button>
+              <input id="mapTimeSlider" type="range" min="0" max="47" value="0" aria-label="Forecast hour selection">
+              <p id="mapHourLabel" class="muted weather-map-hour">Forecast +0h</p>
+            </div>
+            <div class="weather-map-alerts">
+              <h3>Storm Alerts</h3>
+              <p id="mapStormIndicator" class="summary">No active storm cells detected.</p>
+            </div>
+          </div>
+          <div id="weatherMap" class="weather-map-canvas" aria-label="Live weather map"></div>
+          <div class="weather-map-footer">
+            <div class="weather-map-legend">
+              <strong>Radar Intensity</strong>
+              <div class="legend-row">
+                <span class="legend-chip legend-light">Light Rain</span>
+                <span class="legend-chip legend-moderate">Moderate</span>
+                <span class="legend-chip legend-heavy">Heavy</span>
+                <span class="legend-chip legend-storm">Storm</span>
+              </div>
+            </div>
+            <div id="mapStormList" class="storm-list">
+              <div class="storm-list-item">No storm alerts in the sampled region.</div>
+            </div>
+          </div>
         </article>
       </section>
 
@@ -261,7 +327,9 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <script src="/js/app.js?v=20260306-10"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet-velocity/dist/leaflet-velocity.min.js"></script>
+  <script src="/js/app.js?v=20260306-15"></script>
 </body>
 </html>
 

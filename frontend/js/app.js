@@ -1,7 +1,14 @@
 const CACHE_KEY = "weather-studio-cache-v2";
-const PWA_CACHE_NAME = "weather-studio-pwa-v19";
+const PWA_CACHE_NAME = "weather-studio-pwa-v24";
 const FAVORITES_KEY = "weather-studio-favorites-v2";
 const LAST_COORDS_KEY = "weather-studio-last-coords-v2";
+const WEATHER_HISTORY_DB_NAME = "weather-studio-history-v1";
+const WEATHER_HISTORY_STORE_NAME = "forecast_history";
+const WEATHER_HISTORY_RETENTION_MS = 72 * 60 * 60 * 1000;
+const WEATHER_HISTORY_READ_LIMIT = 144;
+const OFFLINE_MODE_BANNER_TEXT = "Offline Mode – Showing predicted forecast based on cached data";
+const LIVE_SCAN_INTERVAL_MS = 5000;
+const LIVE_SCAN_CACHE_TTL_MS = 60 * 1000;
 const LUNAR_CYCLE_DAYS = 29.53058867;
 const REFERENCE_NEW_MOON_UTC_MS = Date.UTC(2000, 0, 6, 18, 14, 0);
 const QUICK_CITIES = ["Kolkata", "Delhi", "Mumbai", "Chennai", "Dhaka", "Bengaluru"];
@@ -90,6 +97,7 @@ const el = {
   apiKeyInput: document.getElementById("apiKeyInput"),
   themeToggleBtn: document.getElementById("themeToggleBtn"),
   statusText: document.getElementById("statusText"),
+  offlineBanner: document.getElementById("offlineBanner"),
   quickCities: document.getElementById("quickCities"),
   favoriteCities: document.getElementById("favoriteCities"),
   conditionSymbol: document.getElementById("conditionSymbol"),
@@ -100,6 +108,12 @@ const el = {
   aiSummary: document.getElementById("aiSummary"),
   activityList: document.getElementById("activityList"),
   mlPredictionList: document.getElementById("mlPredictionList"),
+  offlineForecastCard: document.getElementById("offlineForecastCard"),
+  offlineForecastTemp: document.getElementById("offlineForecastTemp"),
+  offlineForecastRain: document.getElementById("offlineForecastRain"),
+  offlineForecastWind: document.getElementById("offlineForecastWind"),
+  offlineForecastTrend: document.getElementById("offlineForecastTrend"),
+  offlineForecastMeta: document.getElementById("offlineForecastMeta"),
   forecastCards: document.getElementById("forecastCards"),
   outdoorWindow: document.getElementById("outdoorWindow"),
   climateNarrative: document.getElementById("climateNarrative"),
@@ -116,6 +130,14 @@ const el = {
   skyAnalyzeBtn: document.getElementById("skyAnalyzeBtn"),
   skyImagePreview: document.getElementById("skyImagePreview"),
   skyAnalysisResult: document.getElementById("skyAnalysisResult"),
+  liveCameraStartBtn: document.getElementById("liveCameraStartBtn"),
+  liveCameraStopBtn: document.getElementById("liveCameraStopBtn"),
+  liveCameraCaptureBtn: document.getElementById("liveCameraCaptureBtn"),
+  liveCameraScanBtn: document.getElementById("liveCameraScanBtn"),
+  liveCameraVideo: document.getElementById("liveCameraVideo"),
+  liveCameraCanvas: document.getElementById("liveCameraCanvas"),
+  liveCameraStatus: document.getElementById("liveCameraStatus"),
+  liveSkyResult: document.getElementById("liveSkyResult"),
   ruleRain: document.getElementById("ruleRain"),
   ruleTemp: document.getElementById("ruleTemp"),
   ruleWind: document.getElementById("ruleWind"),
@@ -123,7 +145,6 @@ const el = {
   alertEmail: document.getElementById("alertEmail"),
   evaluateAlertsBtn: document.getElementById("evaluateAlertsBtn"),
   alertList: document.getElementById("alertList"),
-  mapSelection: document.getElementById("mapSelection"),
   installBtn: document.getElementById("installBtn"),
   authState: document.getElementById("authState"),
   authEmail: document.getElementById("authEmail"),
@@ -147,6 +168,7 @@ const el = {
 const state = {
   config: null,
   staticMode: false,
+  apiBase: "",
   current: null,
   forecast: null,
   analytics: null,
@@ -158,9 +180,18 @@ const state = {
   charts: {},
   user: { authenticated: false },
   localFavorites: loadLocalFavorites(),
-  map: null,
-  focusMarker: null,
+  weatherMapController: null,
   deferredPrompt: null,
+  offlineMode: false,
+  offlineForecast: null,
+  offlineForecastEngine: null,
+  liveCamera: {
+    controller: null,
+    scanning: false,
+    busy: false,
+    scanTimer: null,
+    predictionCache: new Map(),
+  },
 };
 
 const i18nState = {
@@ -170,17 +201,524 @@ const i18nState = {
   cache: new Map(),
 };
 
+let weatherHistoryDbPromise = null;
+let offlineForecastModulePromise = null;
+let liveCameraModulePromise = null;
+let weatherMapModulePromise = null;
+
+// Edge-computing cache: keep forecast history on-device so offline predictions run in-browser.
+function idbTransactionDone(transaction) {
+  return new Promise((resolve, reject) => {
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error || new Error("IndexedDB transaction failed."));
+    transaction.onabort = () => reject(transaction.error || new Error("IndexedDB transaction aborted."));
+  });
+}
+
+function normalizeLocationKey(location) {
+  return String(location || "")
+    .split(",")[0]
+    .trim()
+    .toLowerCase();
+}
+
+function safeNumber(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function celsiusToFahrenheit(value) {
+  return (value * 9) / 5 + 32;
+}
+
+function kmhToMph(value) {
+  return value / 1.60934;
+}
+
+function canonicalTemperatureC(current) {
+  if (Number.isFinite(Number(current?.tempC))) return Number(current.tempC);
+  const temp = safeNumber(current?.temperature);
+  if (temp === null) return null;
+  const unit = String(current?.temperatureUnit || "").toUpperCase();
+  return unit.includes("F") ? (temp - 32) * (5 / 9) : temp;
+}
+
+function canonicalWindKmh(current) {
+  if (Number.isFinite(Number(current?.windKmh))) return Number(current.windKmh);
+  const speed = safeNumber(current?.windSpeed);
+  if (speed === null) return null;
+  const unit = String(current?.windUnit || "").toLowerCase();
+  if (unit.includes("mph")) return speed * 1.60934;
+  if (unit.includes("m/s") || unit === "ms") return speed * 3.6;
+  return speed;
+}
+
+function formatTemperatureByUnits(tempC, units) {
+  if (!Number.isFinite(Number(tempC))) return "--";
+  const value = units === "imperial" ? celsiusToFahrenheit(Number(tempC)) : Number(tempC);
+  const symbol = units === "imperial" ? "\u00B0F" : "\u00B0C";
+  return `${value.toFixed(1)}${symbol}`;
+}
+
+function formatWindByUnits(windKmh, units) {
+  if (!Number.isFinite(Number(windKmh))) return "--";
+  const value = units === "imperial" ? kmhToMph(Number(windKmh)) : Number(windKmh);
+  const symbol = units === "imperial" ? "mph" : "km/h";
+  return `${value.toFixed(1)} ${symbol}`;
+}
+
+function openWeatherHistoryDb() {
+  if (weatherHistoryDbPromise) return weatherHistoryDbPromise;
+  if (typeof indexedDB === "undefined") {
+    return Promise.reject(new Error("IndexedDB is not supported in this browser."));
+  }
+
+  weatherHistoryDbPromise = new Promise((resolve, reject) => {
+    const request = indexedDB.open(WEATHER_HISTORY_DB_NAME, 1);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(WEATHER_HISTORY_STORE_NAME)) {
+        const store = db.createObjectStore(WEATHER_HISTORY_STORE_NAME, { keyPath: "id", autoIncrement: true });
+        store.createIndex("timestamp", "timestamp", { unique: false });
+        store.createIndex("location", "location", { unique: false });
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error || new Error("Unable to open IndexedDB."));
+  });
+  return weatherHistoryDbPromise;
+}
+
+async function pruneHistoryStore(store, cutoffTimestamp) {
+  // Keep only the trailing 72h window for offline edge predictions.
+  if (typeof IDBKeyRange === "undefined") return;
+  const range = IDBKeyRange.upperBound(cutoffTimestamp, true);
+  await new Promise((resolve, reject) => {
+    const cursorRequest = store.index("timestamp").openCursor(range);
+    cursorRequest.onsuccess = () => {
+      const cursor = cursorRequest.result;
+      if (!cursor) {
+        resolve();
+        return;
+      }
+      cursor.delete();
+      cursor.continue();
+    };
+    cursorRequest.onerror = () => reject(cursorRequest.error || new Error("Failed to prune weather history."));
+  });
+}
+
+async function cleanupExpiredWeatherHistory() {
+  try {
+    const db = await openWeatherHistoryDb();
+    const transaction = db.transaction(WEATHER_HISTORY_STORE_NAME, "readwrite");
+    const done = idbTransactionDone(transaction);
+    const store = transaction.objectStore(WEATHER_HISTORY_STORE_NAME);
+    await pruneHistoryStore(store, Date.now() - WEATHER_HISTORY_RETENTION_MS);
+    await done;
+  } catch {
+    // Ignore offline history cleanup errors to avoid blocking weather flow.
+  }
+}
+
+async function saveWeatherHistoryRecord(record) {
+  try {
+    const db = await openWeatherHistoryDb();
+    const transaction = db.transaction(WEATHER_HISTORY_STORE_NAME, "readwrite");
+    const done = idbTransactionDone(transaction);
+    const store = transaction.objectStore(WEATHER_HISTORY_STORE_NAME);
+    store.put(record);
+    await pruneHistoryStore(store, Date.now() - WEATHER_HISTORY_RETENTION_MS);
+    await done;
+  } catch {
+    // Ignore write errors; live weather flow should still complete.
+  }
+}
+
+async function readRecentWeatherHistory(locationHint = "", limit = WEATHER_HISTORY_READ_LIMIT) {
+  const db = await openWeatherHistoryDb();
+  const transaction = db.transaction(WEATHER_HISTORY_STORE_NAME, "readonly");
+  const done = idbTransactionDone(transaction);
+  const store = transaction.objectStore(WEATHER_HISTORY_STORE_NAME);
+  const index = store.index("timestamp");
+  const cutoff = Date.now() - WEATHER_HISTORY_RETENTION_MS;
+  const range = typeof IDBKeyRange === "undefined" ? null : IDBKeyRange.lowerBound(cutoff);
+  const normalizedHint = normalizeLocationKey(locationHint);
+
+  const byLocation = [];
+  const recent = [];
+  await new Promise((resolve, reject) => {
+    const cursorRequest = index.openCursor(range, "prev");
+    cursorRequest.onsuccess = () => {
+      const cursor = cursorRequest.result;
+      if (!cursor) {
+        resolve();
+        return;
+      }
+      const item = cursor.value || {};
+      recent.push(item);
+      if (normalizedHint && normalizeLocationKey(item.location) === normalizedHint) {
+        byLocation.push(item);
+      }
+      if (recent.length >= limit) {
+        resolve();
+        return;
+      }
+      cursor.continue();
+    };
+    cursorRequest.onerror = () => reject(cursorRequest.error || new Error("Failed to read cached weather history."));
+  });
+  await done;
+  return (byLocation.length ? byLocation : recent).slice(0, limit);
+}
+
+async function persistWeatherHistoryFromBundle(bundle) {
+  const current = bundle?.current || {};
+  const today = (bundle?.forecast?.daily || [])[0] || {};
+  const temperature = canonicalTemperatureC(current);
+  const humidity = safeNumber(current.humidity);
+  const wind = canonicalWindKmh(current);
+  const rainProbability = safeNumber(today.rainProbability);
+  const location = String(current.location || "").trim();
+
+  if (!location && temperature === null && humidity === null && wind === null && rainProbability === null) {
+    return;
+  }
+
+  const record = {
+    timestamp: Date.now(),
+    location: location || "Unknown location",
+    temperature,
+    humidity,
+    wind,
+    rain_probability: rainProbability !== null ? Math.max(0, Math.min(100, rainProbability)) : null,
+  };
+  await saveWeatherHistoryRecord(record);
+}
+
+async function getOfflineForecastEngine() {
+  if (state.offlineForecastEngine) return state.offlineForecastEngine;
+  if (!offlineForecastModulePromise) {
+    offlineForecastModulePromise = importModuleCandidates([
+      "/js/offlineForecast.js",
+      "/frontend/js/offlineForecast.js",
+      "/static/js/offlineForecast.js",
+    ]);
+  }
+  const module = await offlineForecastModulePromise;
+  state.offlineForecastEngine = module.createOfflineForecastEngine();
+  return state.offlineForecastEngine;
+}
+
+async function getLiveCameraModule() {
+  if (!liveCameraModulePromise) {
+    liveCameraModulePromise = importModuleCandidates([
+      "/js/liveCamera.js",
+      "/frontend/js/liveCamera.js",
+      "/static/js/liveCamera.js",
+    ]);
+  }
+  return liveCameraModulePromise;
+}
+
+async function getWeatherMapModule() {
+  if (!weatherMapModulePromise) {
+    weatherMapModulePromise = importModuleCandidates([
+      "/js/weatherMap.js",
+      "/frontend/js/weatherMap.js",
+      "/static/js/weatherMap.js",
+    ]);
+  }
+  return weatherMapModulePromise;
+}
+
+async function initializeWeatherMapController() {
+  if (state.weatherMapController) {
+    await state.weatherMapController.updateContext({
+      apiBase: state.apiBase,
+      staticMode: state.staticMode,
+      forceTileReload: true,
+    });
+    return;
+  }
+
+  const mapContainer = document.getElementById("weatherMap");
+  if (!mapContainer) return;
+
+  try {
+    const module = await getWeatherMapModule();
+    state.weatherMapController = module.createWeatherMapController({
+      containerId: "weatherMap",
+      apiBase: state.apiBase,
+      staticMode: state.staticMode,
+      builtinApiKeys: BUILTIN_API_KEYS,
+      getApiKey: () => el.apiKeyInput?.value?.trim() || "",
+      playButtonId: "mapPlayBtn",
+      pauseButtonId: "mapPauseBtn",
+      hourSliderId: "mapTimeSlider",
+      hourLabelId: "mapHourLabel",
+      stormIndicatorId: "mapStormIndicator",
+      stormListId: "mapStormList",
+      onStatus: (text, tone) => setStatus(text, tone),
+      onLocationSelected: ({ latitude, longitude }) => {
+        state.coords = { latitude: Number(latitude), longitude: Number(longitude) };
+        localStorage.setItem(LAST_COORDS_KEY, JSON.stringify(state.coords));
+        void loadPlatformBundle({ latitude: state.coords.latitude, longitude: state.coords.longitude });
+      },
+    });
+    await state.weatherMapController.init();
+  } catch (error) {
+    setStatus(`Map module unavailable: ${error.message}`, "error");
+  }
+}
+
+async function importModuleCandidates(candidates) {
+  let lastError = null;
+  for (const candidate of candidates) {
+    try {
+      return await import(candidate);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError || new Error("Failed to load dynamic module.");
+}
+
+function setLiveCameraStatus(text, tone = "") {
+  if (!el.liveCameraStatus) return;
+  const message = String(text || "");
+  el.liveCameraStatus.textContent = message;
+  el.liveCameraStatus.style.color = tone === "error" ? "#d13a4d" : tone === "success" ? "#179d84" : "";
+}
+
+function setLiveScanButtonLabel(scanning) {
+  if (!el.liveCameraScanBtn) return;
+  el.liveCameraScanBtn.textContent = scanning ? "Stop Live Scan" : "Start Live Scan";
+}
+
+function setLiveCameraButtons() {
+  const active = Boolean(state.liveCamera.controller?.isActive?.());
+  if (el.liveCameraStartBtn) el.liveCameraStartBtn.disabled = active;
+  if (el.liveCameraStopBtn) el.liveCameraStopBtn.disabled = !active;
+  if (el.liveCameraCaptureBtn) el.liveCameraCaptureBtn.disabled = !active || state.liveCamera.busy;
+  if (el.liveCameraScanBtn) el.liveCameraScanBtn.disabled = !active || state.liveCamera.busy;
+  setLiveScanButtonLabel(Boolean(state.liveCamera.scanning));
+}
+
+function stopLiveScan() {
+  if (state.liveCamera.scanTimer) {
+    clearInterval(state.liveCamera.scanTimer);
+    state.liveCamera.scanTimer = null;
+  }
+  state.liveCamera.scanning = false;
+  setLiveScanButtonLabel(false);
+}
+
+function clearExpiredLivePredictionCache() {
+  const now = Date.now();
+  for (const [key, entry] of state.liveCamera.predictionCache.entries()) {
+    if (!entry || now - Number(entry.at || 0) > LIVE_SCAN_CACHE_TTL_MS) {
+      state.liveCamera.predictionCache.delete(key);
+    }
+  }
+}
+
+function livePredictionCacheKey(signature) {
+  const lat = Number.isFinite(Number(state.coords?.latitude)) ? Number(state.coords.latitude).toFixed(3) : "na";
+  const lon = Number.isFinite(Number(state.coords?.longitude)) ? Number(state.coords.longitude).toFixed(3) : "na";
+  return `${signature}:${lat}:${lon}:${state.staticMode ? "static" : "backend"}`;
+}
+
+function setOfflineModeUi(visible, bannerText = OFFLINE_MODE_BANNER_TEXT) {
+  if (el.offlineBanner) {
+    el.offlineBanner.hidden = !visible;
+    if (visible) el.offlineBanner.textContent = bannerText;
+  }
+  if (el.offlineForecastCard) {
+    el.offlineForecastCard.hidden = !visible;
+  }
+}
+
+function renderOfflineForecastCard() {
+  if (!el.offlineForecastCard) return;
+  if (!state.offlineMode) {
+    el.offlineForecastCard.hidden = true;
+    return;
+  }
+
+  const forecast = state.offlineForecast;
+  el.offlineForecastCard.hidden = false;
+  if (!forecast) {
+    if (el.offlineForecastTemp) el.offlineForecastTemp.textContent = "--";
+    if (el.offlineForecastRain) el.offlineForecastRain.textContent = "--";
+    if (el.offlineForecastWind) el.offlineForecastWind.textContent = "--";
+    if (el.offlineForecastTrend) el.offlineForecastTrend.textContent = "--";
+    if (el.offlineForecastMeta) {
+      el.offlineForecastMeta.textContent = "No cached forecast available. Please connect to the internet.";
+    }
+    return;
+  }
+
+  const units = el.unitsSelect?.value === "imperial" ? "imperial" : "metric";
+  const temperatureC = safeNumber(forecast?.predictions?.temperature);
+  const windKmh = safeNumber(forecast?.predictions?.wind);
+  const rain = safeNumber(forecast?.predictions?.rainProbability);
+  if (el.offlineForecastTemp) el.offlineForecastTemp.textContent = formatTemperatureByUnits(temperatureC, units);
+  if (el.offlineForecastRain) el.offlineForecastRain.textContent = rain === null ? "--" : `${Math.round(rain)}%`;
+  if (el.offlineForecastWind) el.offlineForecastWind.textContent = formatWindByUnits(windKmh, units);
+
+  const tempTrend = forecast?.trends?.temperature || "stable";
+  const humidityTrend = forecast?.trends?.humidity || "stable";
+  const rainTrend = forecast?.trends?.rainProbability || "stable";
+  if (el.offlineForecastTrend) {
+    el.offlineForecastTrend.textContent = `Temp ${tempTrend} | Humidity ${humidityTrend} | Rain ${rainTrend}`;
+  }
+  if (el.offlineForecastMeta) {
+    const samples = Number(forecast.sampleCount || 0);
+    el.offlineForecastMeta.textContent = `Predicted locally from ${samples} cached samples in the last 72 hours.`;
+  }
+}
+
+function buildOfflineBundleFromPrediction(prediction, records, payload) {
+  const units = payload.units === "imperial" ? "imperial" : "metric";
+  const latest = records[0] || {};
+  const coords = state.coords || DEFAULT_COORDS;
+  const windUnit = units === "imperial" ? "mph" : "km/h";
+  const tempUnit = units === "imperial" ? "\u00B0F" : "\u00B0C";
+  const predictedTempC = Number(prediction.predictions.temperature);
+  const predictedWindKmh = Number(prediction.predictions.wind);
+  const predictedRain = Number(prediction.predictions.rainProbability);
+  const displayTemp = units === "imperial" ? celsiusToFahrenheit(predictedTempC) : predictedTempC;
+  const displayWind = units === "imperial" ? kmhToMph(predictedWindKmh) : predictedWindKmh;
+  const nowIso = new Date().toISOString();
+
+  const current = {
+    location: latest.location || prediction.location || payload.city || "Cached location",
+    temperature: Number.isFinite(displayTemp) ? Number(displayTemp.toFixed(1)) : null,
+    temperatureUnit: tempUnit,
+    description: "offline predicted forecast",
+    condition: predictedRain >= 60 ? "Rain" : "Clouds",
+    symbol: predictedRain >= 60 ? WEATHER_SYMBOLS.Rain : WEATHER_SYMBOLS.Clouds,
+    feelsLike: Number.isFinite(displayTemp) ? Number(displayTemp.toFixed(1)) : null,
+    humidity: safeNumber(latest.humidity),
+    windSpeed: Number.isFinite(displayWind) ? Number(displayWind.toFixed(1)) : null,
+    windUnit,
+    pressure: "--",
+    clouds: "--",
+    sunrise: "--",
+    sunset: "--",
+    source: "offline forecast engine",
+    latitude: Number(coords.latitude),
+    longitude: Number(coords.longitude),
+    tempC: Number.isFinite(predictedTempC) ? Number(predictedTempC.toFixed(1)) : null,
+    windKmh: Number.isFinite(predictedWindKmh) ? Number(predictedWindKmh.toFixed(1)) : null,
+    updatedAtUtc: nowIso,
+  };
+
+  const temperatureSpread = 2;
+  const dailyValue = {
+    date: nowIso.slice(0, 10),
+    maxTemp: Number((displayTemp + temperatureSpread).toFixed(1)),
+    minTemp: Number((displayTemp - temperatureSpread).toFixed(1)),
+    rainProbability: Number(Math.max(0, Math.min(100, predictedRain)).toFixed(1)),
+    rainAmount: Number((predictedRain >= 60 ? 2 : 0.3).toFixed(1)),
+    uvIndex: 0,
+    windSpeed: Number(displayWind.toFixed(1)),
+    condition: predictedRain >= 60 ? "Rain" : "Clouds",
+  };
+  const forecast = {
+    units: {
+      temperature: units === "imperial" ? "F" : "C",
+      wind: windUnit,
+      precipitation: units === "imperial" ? "in" : "mm",
+    },
+    daily: [dailyValue],
+    hourly: [],
+  };
+
+  const analytics = staticBuildAnalytics(forecast);
+  const activity = staticBuildActivity(current, forecast);
+  return {
+    current,
+    forecast,
+    analytics,
+    activity,
+    alerts: staticBuildAlerts(current, forecast, []),
+    aiSummary: `Offline edge prediction generated from cached weather history for ${current.location}.`,
+    mlPrediction: {
+      temperature: Number.isFinite(predictedTempC) ? Number(predictedTempC.toFixed(1)) : null,
+      rainProbability: Number.isFinite(predictedRain) ? Number((predictedRain / 100).toFixed(2)) : null,
+      confidence: 0.45,
+      humidityTrend: prediction?.trends?.humidity || "stable",
+    },
+    offlineForecast: prediction,
+  };
+}
+
+async function loadOfflineBundle(payload) {
+  const locationHint = payload.city || state.current?.location || "";
+  const records = await readRecentWeatherHistory(locationHint);
+  if (!records.length) {
+    throw new Error("No cached forecast available. Please connect to the internet.");
+  }
+  const engine = await getOfflineForecastEngine();
+  const prediction = engine.generate(records);
+  return buildOfflineBundleFromPrediction(prediction, records, payload);
+}
+
 async function apiRequest(path, options = {}) {
-  const response = await fetch(path, {
-    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
-    credentials: "same-origin",
+  const endpoint = /^https?:\/\//i.test(path) ? path : `${state.apiBase || ""}${path}`;
+  const headers = { ...(options.headers || {}) };
+  const isFormDataBody = typeof FormData !== "undefined" && options.body instanceof FormData;
+  if (options.body && !isFormDataBody && !headers["Content-Type"]) {
+    headers["Content-Type"] = "application/json";
+  }
+  const response = await fetch(endpoint, {
     ...options,
+    headers,
+    credentials: state.apiBase ? "include" : "same-origin",
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
     throw new Error(payload.error || `Request failed (${response.status})`);
   }
   return payload;
+}
+
+function backendBaseCandidates() {
+  if (typeof window === "undefined") return [""];
+  const candidates = [""];
+  const protocol = window.location.protocol === "https:" ? "https" : "http";
+  const hostname = window.location.hostname || "127.0.0.1";
+  const port = String(window.location.port || "");
+  if (port !== "5000") {
+    if (hostname === "localhost") {
+      candidates.push(`${protocol}://localhost:5000`);
+      candidates.push(`${protocol}://127.0.0.1:5000`);
+    } else {
+      candidates.push(`${protocol}://127.0.0.1:5000`);
+      candidates.push(`${protocol}://localhost:5000`);
+    }
+  }
+  return [...new Set(candidates)];
+}
+
+async function detectBackendConfig() {
+  for (const base of backendBaseCandidates()) {
+    const endpoint = `${base}/api/config`;
+    try {
+      const response = await fetch(endpoint, {
+        credentials: base ? "include" : "same-origin",
+      });
+      if (!response.ok) continue;
+      const payload = await response.json().catch(() => null);
+      if (!payload || !Array.isArray(payload.languages)) continue;
+      return { config: payload, apiBase: base };
+    } catch {
+      // Try next candidate.
+    }
+  }
+  return null;
 }
 
 function candidateApiKeys(customKey) {
@@ -788,6 +1326,25 @@ function cacheKeyFromPayload(payload) {
 async function loadPlatformBundle(location = {}) {
   const payload = { ...currentPayload(), ...location };
   const key = cacheKeyFromPayload(payload);
+  if (!navigator.onLine) {
+    setOfflineModeUi(true, OFFLINE_MODE_BANNER_TEXT);
+    setStatus("Offline detected. Generating local forecast...");
+    try {
+      const bundle = await loadOfflineBundle(payload);
+      cacheBundle(key, bundle);
+      applyBundle(bundle, { offlineMode: true });
+      setStatus(OFFLINE_MODE_BANNER_TEXT, "success");
+      return true;
+    } catch (error) {
+      state.offlineMode = true;
+      state.offlineForecast = null;
+      renderOfflineForecastCard();
+      setStatus(error.message, "error");
+      return false;
+    }
+  }
+
+  setOfflineModeUi(false);
   setStatus("Loading weather intelligence...");
   try {
     let bundle;
@@ -797,7 +1354,8 @@ async function loadPlatformBundle(location = {}) {
       bundle = await apiRequest("/api/platform-bundle", { method: "POST", body: JSON.stringify(payload) });
     }
     cacheBundle(key, bundle);
-    applyBundle(bundle);
+    await persistWeatherHistoryFromBundle(bundle);
+    applyBundle(bundle, { offlineMode: false });
     setStatus(state.staticMode ? "Weather intelligence updated (static mode)" : "Weather intelligence updated", "success");
     await saveCurrentCityToServer();
     return true;
@@ -808,16 +1366,32 @@ async function loadPlatformBundle(location = {}) {
       try {
         const bundle = await staticBuildBundle(payload);
         cacheBundle(key, bundle);
-        applyBundle(bundle);
+        await persistWeatherHistoryFromBundle(bundle);
+        applyBundle(bundle, { offlineMode: false });
         setStatus("Backend unavailable. Running in static mode.", "success");
         return true;
       } catch {
         // Continue to cache fallback below.
       }
     }
+    if (!navigator.onLine) {
+      try {
+        const bundle = await loadOfflineBundle(payload);
+        cacheBundle(key, bundle);
+        applyBundle(bundle, { offlineMode: true });
+        setStatus(OFFLINE_MODE_BANNER_TEXT, "success");
+        return true;
+      } catch {
+        state.offlineMode = true;
+        state.offlineForecast = null;
+        renderOfflineForecastCard();
+        setStatus("No cached forecast available. Please connect to the internet.", "error");
+        return false;
+      }
+    }
     const cached = readCacheBundle(key);
     if (cached) {
-      applyBundle(cached);
+      applyBundle(cached, { offlineMode: false });
       setStatus(`Live request failed, using cache: ${error.message}`, "error");
       return true;
     }
@@ -826,24 +1400,39 @@ async function loadPlatformBundle(location = {}) {
   }
 }
 
-function applyBundle(bundle) {
+function applyBundle(bundle, options = {}) {
   state.current = bundle.current;
   state.forecast = bundle.forecast;
   state.analytics = bundle.analytics;
   state.activity = bundle.activity;
   state.mlPrediction = bundle.mlPrediction || bundle.ml_prediction || null;
   state.alerts = bundle.alerts || [];
-  state.coords = { latitude: Number(bundle.current.latitude), longitude: Number(bundle.current.longitude) };
-  localStorage.setItem(LAST_COORDS_KEY, JSON.stringify(state.coords));
+  state.offlineMode = Boolean(options.offlineMode);
+  state.offlineForecast = bundle.offlineForecast || null;
+  if (Number.isFinite(Number(bundle?.current?.latitude)) && Number.isFinite(Number(bundle?.current?.longitude))) {
+    state.coords = { latitude: Number(bundle.current.latitude), longitude: Number(bundle.current.longitude) };
+    localStorage.setItem(LAST_COORDS_KEY, JSON.stringify(state.coords));
+  }
+
+  setOfflineModeUi(state.offlineMode, OFFLINE_MODE_BANNER_TEXT);
 
   renderCurrent();
   renderForecast();
   renderAnalytics();
   renderActivity();
   renderMlPrediction();
+  renderOfflineForecastCard();
   renderAlerts(state.alerts);
   renderAiSummary(bundle.aiSummary);
   addFavorite((state.current.location || "").split(",")[0]);
+  if (state.weatherMapController) {
+    void state.weatherMapController.updateContext({ apiBase: state.apiBase, staticMode: state.staticMode });
+    state.weatherMapController.setFocusLocation({
+      latitude: state.coords?.latitude,
+      longitude: state.coords?.longitude,
+      label: state.current?.location || "Selected location",
+    });
+  }
   void loadClimateInsights();
 }
 
@@ -1095,7 +1684,7 @@ function renderChart(key, canvas, labels, values, color) {
 
 async function loadClimateInsights() {
   if (!state.coords) return;
-  if (state.staticMode) {
+  if (state.staticMode || state.offlineMode || !navigator.onLine) {
     el.climateNarrative.textContent = "Climate archive insights require backend mode. Run Flask at http://127.0.0.1:5000 for full climate analytics.";
     el.climateStats.innerHTML = "";
     return;
@@ -1454,13 +2043,7 @@ async function staticSkyAnalysis(file) {
   };
 }
 
-function renderSkyAnalysis(result) {
-  if (!el.skyAnalysisResult) return;
-  if (!result) {
-    el.skyAnalysisResult.innerHTML = `<div class="list-item">Sky analysis unavailable.</div>`;
-    return;
-  }
-
+function skyAnalysisMarkup(result) {
   const rain = Number.isFinite(Number(result.rain_probability)) ? `${Math.round(Number(result.rain_probability) * 100)}%` : "--";
   const storm = Number.isFinite(Number(result.storm_risk)) ? `${Math.round(Number(result.storm_risk) * 100)}%` : "--";
   const cloudDensity = Number.isFinite(Number(result.cloud_density)) ? `${Math.round(Number(result.cloud_density) * 100)}%` : "--";
@@ -1478,7 +2061,7 @@ function renderSkyAnalysis(result) {
     ? `<div class="list-item"><strong>Analysis Mode</strong><div>${escapeHtml(capitalize(mode))}</div></div>`
     : "";
 
-  el.skyAnalysisResult.innerHTML = [
+  return [
     `<div class="list-item"><strong>Sky Condition</strong><div>${escapeHtml(capitalize(String(result.sky_condition || "--").replaceAll("_", " ")))}</div></div>`,
     `<div class="list-item"><strong>Rain Probability</strong><div>${rain}</div></div>`,
     `<div class="list-item"><strong>Storm Risk</strong><div>${storm}</div></div>`,
@@ -1491,6 +2074,54 @@ function renderSkyAnalysis(result) {
     .join("");
 }
 
+function renderSkyAnalysis(result) {
+  if (!el.skyAnalysisResult) return;
+  if (!result) {
+    el.skyAnalysisResult.innerHTML = `<div class="list-item">Sky analysis unavailable.</div>`;
+    return;
+  }
+  el.skyAnalysisResult.innerHTML = skyAnalysisMarkup(result);
+}
+
+function renderLiveSkyAnalysis(result) {
+  if (!el.liveSkyResult) return;
+  if (!result) {
+    el.liveSkyResult.innerHTML = `<div class="list-item">Live camera prediction unavailable.</div>`;
+    return;
+  }
+  el.liveSkyResult.innerHTML = skyAnalysisMarkup(result);
+}
+
+function buildSkyVisionFormData(imageBlob, filename = "sky.jpg") {
+  const body = new FormData();
+  body.append("image", imageBlob, filename);
+  if (state.coords?.latitude != null && state.coords?.longitude != null) {
+    body.append("lat", String(state.coords.latitude));
+    body.append("lon", String(state.coords.longitude));
+  }
+  return body;
+}
+
+async function requestSkyPrediction(imageBlob, options = {}) {
+  const liveMode = Boolean(options.liveMode);
+  const filename = options.filename || (liveMode ? "live-sky.jpg" : "sky.jpg");
+  if (state.staticMode) {
+    const staticResult = await staticSkyAnalysis(imageBlob);
+    return { ...staticResult, input_source: liveMode ? "live_camera" : "upload" };
+  }
+
+  const endpointPath = liveMode ? "/api/vision/live-sky" : "/api/vision/sky-analysis";
+  const endpoint = `${state.apiBase || ""}${endpointPath}`;
+  const response = await fetch(endpoint, {
+    method: "POST",
+    credentials: state.apiBase ? "include" : "same-origin",
+    body: buildSkyVisionFormData(imageBlob, filename),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload.error || `Sky analysis failed (${response.status})`);
+  return payload;
+}
+
 async function analyzeSkyImage() {
   if (!el.skyImageInput) return;
   const file = el.skyImageInput.files?.[0];
@@ -1498,43 +2129,155 @@ async function analyzeSkyImage() {
     setStatus("Select a sky image first.", "error");
     return;
   }
-  if (state.staticMode) {
-    try {
-      const result = await staticSkyAnalysis(file);
-      state.skyAnalysis = result;
-      renderSkyAnalysis(result);
-      setStatus("Sky image analyzed in static mode.", "success");
-    } catch (error) {
-      renderSkyAnalysis(null);
-      setStatus(error.message, "error");
-    }
-    return;
-  }
-
-  const body = new FormData();
-  body.append("image", file, file.name || "sky.jpg");
-  if (state.coords?.latitude != null && state.coords?.longitude != null) {
-    body.append("lat", String(state.coords.latitude));
-    body.append("lon", String(state.coords.longitude));
-  }
 
   setStatus("Analyzing sky image...");
   try {
-    const response = await fetch("/api/vision/sky-analysis", {
-      method: "POST",
-      credentials: "same-origin",
-      body,
+    const result = await requestSkyPrediction(file, {
+      liveMode: false,
+      filename: file.name || "sky.jpg",
     });
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(payload.error || `Sky analysis failed (${response.status})`);
-
-    state.skyAnalysis = payload;
-    renderSkyAnalysis(payload);
-    setStatus("Sky image analysis complete.", "success");
+    state.skyAnalysis = result;
+    renderSkyAnalysis(result);
+    renderLiveSkyAnalysis(result);
+    setStatus(state.staticMode ? "Sky image analyzed in static mode." : "Sky image analysis complete.", "success");
   } catch (error) {
     renderSkyAnalysis(null);
+    renderLiveSkyAnalysis(null);
     setStatus(error.message, "error");
   }
+}
+
+async function ensureLiveCameraController() {
+  if (state.liveCamera.controller) return state.liveCamera.controller;
+  const module = await getLiveCameraModule();
+  const controller = new module.LiveCameraController({
+    videoElement: el.liveCameraVideo,
+    canvasElement: el.liveCameraCanvas,
+  });
+  state.liveCamera.controller = controller;
+  return controller;
+}
+
+function initializeLiveCameraUi() {
+  if (!el.liveCameraStartBtn || !el.liveCameraVideo || !el.liveCameraCanvas) return;
+  const supported = Boolean(navigator?.mediaDevices?.getUserMedia);
+  if (!supported) {
+    el.liveCameraStartBtn.disabled = true;
+    if (el.liveCameraStopBtn) el.liveCameraStopBtn.disabled = true;
+    if (el.liveCameraCaptureBtn) el.liveCameraCaptureBtn.disabled = true;
+    if (el.liveCameraScanBtn) el.liveCameraScanBtn.disabled = true;
+    setLiveCameraStatus("Live camera is unavailable in this browser. Use file upload as fallback.", "error");
+    return;
+  }
+  setLiveCameraStatus("Use Start Camera to begin live sky scanning.");
+  setLiveCameraButtons();
+}
+
+async function startLiveCamera() {
+  if (!el.liveCameraVideo || !el.liveCameraCanvas) return;
+  try {
+    const controller = await ensureLiveCameraController();
+    await controller.start();
+    if (el.liveCameraCanvas) el.liveCameraCanvas.style.display = "none";
+    setLiveCameraStatus("Camera started. Point to sky and capture.");
+    setStatus("Live camera ready.", "success");
+  } catch (error) {
+    setLiveCameraStatus(`Camera error: ${error.message}`, "error");
+    setStatus(error.message, "error");
+  } finally {
+    setLiveCameraButtons();
+  }
+}
+
+function stopLiveCamera() {
+  stopLiveScan();
+  state.liveCamera.busy = false;
+  if (state.liveCamera.controller) {
+    state.liveCamera.controller.stop();
+  }
+  setLiveCameraStatus("Camera stopped.");
+  setLiveCameraButtons();
+}
+
+async function captureLiveSkyFrame(options = {}) {
+  const fromLiveScan = Boolean(options.fromLiveScan);
+  const controller = state.liveCamera.controller;
+  if (!controller || !controller.isActive()) {
+    if (!fromLiveScan) setStatus("Start camera before capture.", "error");
+    setLiveCameraStatus("Start camera before capture.", "error");
+    return;
+  }
+  if (state.liveCamera.busy) return;
+
+  state.liveCamera.busy = true;
+  setLiveCameraButtons();
+  try {
+    if (!fromLiveScan) {
+      setStatus("Capturing live sky frame...");
+    }
+    const captured = await controller.captureFrame({ type: "image/jpeg", quality: 0.92 });
+    if (el.liveCameraCanvas) el.liveCameraCanvas.style.display = "block";
+
+    clearExpiredLivePredictionCache();
+    const cacheKey = livePredictionCacheKey(captured.signature);
+    let result = null;
+    const cached = state.liveCamera.predictionCache.get(cacheKey);
+    if (cached && Date.now() - Number(cached.at || 0) <= LIVE_SCAN_CACHE_TTL_MS) {
+      result = { ...cached.value, analysis_mode: "client_frame_cache" };
+    } else {
+      result = await requestSkyPrediction(captured.blob, {
+        liveMode: true,
+        filename: `live-sky-${Date.now()}.jpg`,
+      });
+      state.liveCamera.predictionCache.set(cacheKey, { at: Date.now(), value: result });
+      if (state.liveCamera.predictionCache.size > 80) {
+        const oldestKey = state.liveCamera.predictionCache.keys().next().value;
+        if (oldestKey) state.liveCamera.predictionCache.delete(oldestKey);
+      }
+    }
+
+    state.skyAnalysis = result;
+    renderSkyAnalysis(result);
+    renderLiveSkyAnalysis(result);
+    if (fromLiveScan) {
+      setLiveCameraStatus("Live scan updated.");
+    } else {
+      setStatus("Live sky analysis complete.", "success");
+      setLiveCameraStatus("Sky frame analyzed successfully.", "success");
+    }
+  } catch (error) {
+    renderLiveSkyAnalysis(null);
+    if (!fromLiveScan) setStatus(error.message, "error");
+    setLiveCameraStatus(error.message, "error");
+  } finally {
+    state.liveCamera.busy = false;
+    setLiveCameraButtons();
+  }
+}
+
+async function toggleLiveSkyScan() {
+  if (state.liveCamera.scanning) {
+    stopLiveScan();
+    setLiveCameraStatus("Live scan stopped.");
+    setLiveCameraButtons();
+    return;
+  }
+
+  if (!state.liveCamera.controller?.isActive?.()) {
+    await startLiveCamera();
+    if (!state.liveCamera.controller?.isActive?.()) {
+      return;
+    }
+  }
+
+  state.liveCamera.scanning = true;
+  setLiveScanButtonLabel(true);
+  setLiveCameraStatus("Live scan running every 5 seconds.");
+  await captureLiveSkyFrame({ fromLiveScan: true });
+  state.liveCamera.scanTimer = setInterval(() => {
+    void captureLiveSkyFrame({ fromLiveScan: true });
+  }, LIVE_SCAN_INTERVAL_MS);
+  setLiveCameraButtons();
 }
 
 function appendChat(text, role) {
@@ -1678,6 +2421,9 @@ function setupSectionNavigation() {
     document.getElementById(section)?.classList.add("is-active");
     if (section === "analytics" && state.analytics) {
       requestAnimationFrame(() => renderAnalytics());
+    }
+    if (section === "maps" && state.weatherMapController) {
+      requestAnimationFrame(() => state.weatherMapController.invalidateSize());
     }
     if (isMobileNavViewport()) closeSidebarNav();
   });
@@ -1918,64 +2664,6 @@ async function saveCurrentCityToServer() {
     // silent
   }
 }
-async function initMap() {
-  const mapContainer = document.getElementById("map");
-  if (typeof L === "undefined" || !mapContainer) return;
-  state.map = L.map("map", { zoomControl: true }).setView([22.9, 79.5], 4);
-
-  const base = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    attribution: "&copy; OpenStreetMap contributors",
-  }).addTo(state.map);
-
-  const overlays = {};
-  try {
-    let layers = {};
-    if (state.staticMode) {
-      const key = (el.apiKeyInput.value.trim() || BUILTIN_API_KEYS[0] || "").trim();
-      if (key) {
-        layers = {
-          temperature: `https://tile.openweathermap.org/map/temp_new/{z}/{x}/{y}.png?appid=${key}`,
-          rain: `https://tile.openweathermap.org/map/precipitation_new/{z}/{x}/{y}.png?appid=${key}`,
-          wind: `https://tile.openweathermap.org/map/wind_new/{z}/{x}/{y}.png?appid=${key}`,
-          clouds: `https://tile.openweathermap.org/map/clouds_new/{z}/{x}/{y}.png?appid=${key}`,
-        };
-      }
-    } else {
-      const layerPayload = await apiRequest(`/api/map/layers?apiKey=${encodeURIComponent(el.apiKeyInput.value.trim())}`);
-      layers = layerPayload.layers || {};
-    }
-    if (layers.temperature) overlays.Temperature = L.tileLayer(layers.temperature, { opacity: 0.55 });
-    if (layers.rain) overlays.Rain = L.tileLayer(layers.rain, { opacity: 0.55 });
-    if (layers.wind) overlays.Wind = L.tileLayer(layers.wind, { opacity: 0.55 });
-    if (layers.clouds) overlays.Clouds = L.tileLayer(layers.clouds, { opacity: 0.55 });
-  } catch {
-    // optional
-  }
-
-  L.control.layers({ OpenStreetMap: base }, overlays).addTo(state.map);
-
-  state.map.on("click", async (event) => {
-    if (!el.mapSelection) return;
-    const latitude = event.latlng.lat;
-    const longitude = event.latlng.lng;
-    el.mapSelection.innerHTML = `<div class="list-item">Loading weather for ${latitude.toFixed(3)}, ${longitude.toFixed(3)}...</div>`;
-    const loaded = await loadPlatformBundle({ latitude, longitude });
-    if (loaded && state.current) {
-      el.mapSelection.innerHTML = `<div class="list-item">Loaded ${state.current.location} at ${latitude.toFixed(3)}, ${longitude.toFixed(3)}.</div>`;
-      return;
-    }
-    el.mapSelection.innerHTML = `<div class="list-item">Could not fetch weather for ${latitude.toFixed(3)}, ${longitude.toFixed(3)}. Try again.</div>`;
-  });
-}
-
-function syncMapMarker() {
-  if (!state.map || !state.coords) return;
-  if (state.focusMarker) state.map.removeLayer(state.focusMarker);
-  state.focusMarker = L.marker([state.coords.latitude, state.coords.longitude]).addTo(state.map);
-  state.focusMarker.bindPopup(state.current?.location || "Selected location").openPopup();
-  state.map.setView([state.coords.latitude, state.coords.longitude], Math.max(state.map.getZoom(), 6));
-}
-
 async function detectLocation() {
   if (navigator.geolocation) {
     try {
@@ -2030,33 +2718,13 @@ async function useCurrentLocation() {
 }
 
 async function fetchConfig() {
-  const likelyStaticHost =
-    typeof window !== "undefined" &&
-    String(window.location.port || "") !== "" &&
-    !["5000", "80", "443"].includes(String(window.location.port));
-  if (likelyStaticHost) {
-    state.staticMode = true;
-    state.config = {
-      languages: [
-        "English", "Assamese", "Bengali", "Bodo", "Dogri", "Gujarati", "Hindi", "Kannada", "Kashmiri",
-        "Konkani", "Maithili", "Malayalam", "Manipuri", "Marathi", "Nepali", "Odia", "Punjabi",
-        "Sanskrit", "Santali", "Sindhi", "Tamil", "Telugu", "Urdu",
-      ],
-      defaultLanguage: "English",
-      defaultUnits: "metric",
-    };
-    setStatus("Running in static mode.", "success");
-    const languages = state.config.languages || ["English"];
-    el.languageSelect.innerHTML = languages.map((lang) => `<option value="${lang}">${lang}</option>`).join("");
-    el.languageSelect.value = state.config.defaultLanguage || "English";
-    el.unitsSelect.value = state.config.defaultUnits || "metric";
-    return;
-  }
-
-  try {
-    state.config = await apiRequest("/api/config");
+  const detected = await detectBackendConfig();
+  if (detected) {
+    state.apiBase = detected.apiBase || "";
+    state.config = detected.config;
     state.staticMode = false;
-  } catch {
+  } else {
+    state.apiBase = "";
     state.staticMode = true;
     state.config = {
       languages: [
@@ -2069,6 +2737,7 @@ async function fetchConfig() {
     };
     setStatus("Backend API not found. Running in static mode.", "error");
   }
+
   const languages = state.config.languages || ["English"];
   el.languageSelect.innerHTML = languages.map((lang) => `<option value="${lang}">${lang}</option>`).join("");
   el.languageSelect.value = state.config.defaultLanguage || "English";
@@ -2076,11 +2745,20 @@ async function fetchConfig() {
 }
 
 function setupPwa() {
+  if (!el.installBtn) return;
+
+  if (el.installBtn) {
+    el.installBtn.hidden = false;
+    el.installBtn.disabled = true;
+    el.installBtn.textContent = "Install App";
+  }
+
   if ("caches" in window) {
+    const activeCaches = new Set([PWA_CACHE_NAME, `${PWA_CACHE_NAME}-ui`, `${PWA_CACHE_NAME}-data`]);
     caches
       .keys()
       .then((keys) =>
-        Promise.all(keys.filter((key) => key.startsWith("weather-studio-pwa-") && key !== PWA_CACHE_NAME).map((key) => caches.delete(key)))
+        Promise.all(keys.filter((key) => key.startsWith("weather-studio-pwa-") && !activeCaches.has(key)).map((key) => caches.delete(key)))
       )
       .catch(() => {});
   }
@@ -2094,16 +2772,50 @@ function setupPwa() {
   window.addEventListener("beforeinstallprompt", (event) => {
     event.preventDefault();
     state.deferredPrompt = event;
-    el.installBtn.hidden = false;
+    if (el.installBtn) el.installBtn.disabled = false;
+  });
+  window.addEventListener("appinstalled", () => {
+    state.deferredPrompt = null;
+    if (el.installBtn) {
+      el.installBtn.disabled = true;
+      el.installBtn.textContent = "App Installed";
+    }
   });
   el.installBtn.addEventListener("click", async () => {
-    if (!state.deferredPrompt) return;
+    if (!state.deferredPrompt) {
+      setStatus("Install prompt not available yet. Keep using the app and try again.", "error");
+      return;
+    }
     state.deferredPrompt.prompt();
     await state.deferredPrompt.userChoice;
     state.deferredPrompt = null;
-    el.installBtn.hidden = true;
+    el.installBtn.disabled = true;
   });
 }
+
+function setupConnectivityWatchers() {
+  const onConnectivityChange = () => {
+    if (navigator.onLine) {
+      if (state.offlineMode) {
+        setStatus("Connection restored. Refreshing live weather...", "success");
+        void loadPlatformBundle(locationPayload());
+      } else {
+        setOfflineModeUi(false);
+      }
+      return;
+    }
+
+    setOfflineModeUi(true, OFFLINE_MODE_BANNER_TEXT);
+    renderOfflineForecastCard();
+    setStatus("You are offline. Weather updates will use cached history.", "error");
+    void loadPlatformBundle(locationPayload());
+  };
+
+  window.addEventListener("online", onConnectivityChange);
+  window.addEventListener("offline", onConnectivityChange);
+  onConnectivityChange();
+}
+
 function setupSavedServerCities() {
   el.savedCitiesServer.addEventListener("click", (event) => {
     const target = event.target.closest("[data-server-city]");
@@ -2135,6 +2847,18 @@ function wireEvents() {
   if (el.skyAnalyzeBtn) {
     el.skyAnalyzeBtn.addEventListener("click", () => void analyzeSkyImage());
   }
+  if (el.liveCameraStartBtn) {
+    el.liveCameraStartBtn.addEventListener("click", () => void startLiveCamera());
+  }
+  if (el.liveCameraStopBtn) {
+    el.liveCameraStopBtn.addEventListener("click", () => stopLiveCamera());
+  }
+  if (el.liveCameraCaptureBtn) {
+    el.liveCameraCaptureBtn.addEventListener("click", () => void captureLiveSkyFrame());
+  }
+  if (el.liveCameraScanBtn) {
+    el.liveCameraScanBtn.addEventListener("click", () => void toggleLiveSkyScan());
+  }
   el.evaluateAlertsBtn.addEventListener("click", () => void evaluateAlerts());
   el.chatSendBtn.addEventListener("click", () => void askChatbot());
   el.chatInput.addEventListener("keydown", (event) => {
@@ -2157,6 +2881,11 @@ function wireEvents() {
   el.languageSelect.addEventListener("change", () => {
     void applySelectedLanguage();
     if (state.current) void loadPlatformBundle(locationPayload());
+  });
+  el.apiKeyInput.addEventListener("change", () => {
+    if (state.weatherMapController) {
+      void state.weatherMapController.updateContext({ forceTileReload: true, apiBase: state.apiBase, staticMode: state.staticMode });
+    }
   });
 }
 
@@ -2189,8 +2918,12 @@ async function initialize() {
   setupFavoritesEvents();
   setupSavedServerCities();
   setupPwa();
+  setupConnectivityWatchers();
   wireEvents();
+  await initializeWeatherMapController();
+  initializeLiveCameraUi();
   await applySelectedLanguage();
+  await cleanupExpiredWeatherHistory();
 
   const darkPref = localStorage.getItem("weather-studio-dark-mode") === "1";
   el.darkModeToggle.checked = darkPref;
@@ -2199,6 +2932,9 @@ async function initialize() {
   await loadAuthState();
   await useCurrentLocation();
   appendChat("Ask me about rain, weekend temperature, or outdoor plans.", "bot");
+  window.addEventListener("beforeunload", () => {
+    stopLiveCamera();
+  });
 }
 
 void initialize();
