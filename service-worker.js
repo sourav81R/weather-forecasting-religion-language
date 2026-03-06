@@ -1,4 +1,4 @@
-const CACHE_VERSION = "weather-studio-pwa-v27";
+const CACHE_VERSION = "weather-studio-pwa-v29";
 const UI_CACHE = `${CACHE_VERSION}-ui`;
 const DATA_CACHE = `${CACHE_VERSION}-data`;
 
@@ -9,12 +9,12 @@ const CORE_UI_ASSETS = [
   "/css/app.css",
   "/css/app.css?v=20260306-18",
   "/js/app.js",
-  "/js/app.js?v=20260306-19",
+  "/js/app.js?v=20260306-21",
   "/js/weatherMap.js",
   "/js/offlineForecast.js",
   "/js/liveCamera.js",
   "/frontend/css/app.css?v=20260306-18",
-  "/frontend/js/app.js?v=20260306-19",
+  "/frontend/js/app.js?v=20260306-21",
   "/frontend/js/weatherMap.js",
   "/frontend/js/offlineForecast.js",
   "/frontend/js/liveCamera.js",

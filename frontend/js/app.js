@@ -514,6 +514,13 @@ function setLiveCameraStatus(text, tone = "") {
   el.liveCameraStatus.style.color = tone === "error" ? "#d13a4d" : tone === "success" ? "#179d84" : "";
 }
 
+function isSecureLiveCameraContext() {
+  if (typeof window === "undefined") return true;
+  if (window.isSecureContext) return true;
+  const hostname = String(window.location?.hostname || "").toLowerCase();
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+}
+
 function setLiveScanButtonLabel(scanning) {
   if (!el.liveCameraScanBtn) return;
   el.liveCameraScanBtn.textContent = scanning ? "Stop Live Scan" : "Start Live Scan";
@@ -2407,6 +2414,9 @@ async function ensureLiveCameraController() {
 
 function initializeLiveCameraUi() {
   if (!el.liveCameraStartBtn || !el.liveCameraVideo || !el.liveCameraCanvas) return;
+  if (el.skyImageInput) {
+    el.skyImageInput.setAttribute("capture", "environment");
+  }
   const supported = Boolean(navigator?.mediaDevices?.getUserMedia);
   if (!supported) {
     el.liveCameraStartBtn.disabled = true;
@@ -2414,6 +2424,14 @@ function initializeLiveCameraUi() {
     if (el.liveCameraCaptureBtn) el.liveCameraCaptureBtn.disabled = true;
     if (el.liveCameraScanBtn) el.liveCameraScanBtn.disabled = true;
     setLiveCameraStatus("Live camera is unavailable in this browser. Use file upload as fallback.", "error");
+    return;
+  }
+  if (!isSecureLiveCameraContext()) {
+    el.liveCameraStartBtn.disabled = true;
+    if (el.liveCameraStopBtn) el.liveCameraStopBtn.disabled = true;
+    if (el.liveCameraCaptureBtn) el.liveCameraCaptureBtn.disabled = true;
+    if (el.liveCameraScanBtn) el.liveCameraScanBtn.disabled = true;
+    setLiveCameraStatus("Live camera needs HTTPS on mobile. Open this app using https:// and retry.", "error");
     return;
   }
   setLiveCameraStatus("Use Start Camera to begin live sky scanning.");
@@ -2429,8 +2447,9 @@ async function startLiveCamera() {
     setLiveCameraStatus("Camera started. Point to sky and capture.");
     setStatus("Live camera ready.", "success");
   } catch (error) {
-    setLiveCameraStatus(`Camera error: ${error.message}`, "error");
-    setStatus(error.message, "error");
+    const message = String(error?.message || "Unable to start camera.");
+    setLiveCameraStatus(`Camera error: ${message}`, "error");
+    setStatus(message, "error");
   } finally {
     setLiveCameraButtons();
   }
@@ -2763,7 +2782,7 @@ function ensureSeparateLiveScannerCard() {
   const liveScannerCard = document.createElement("article");
   liveScannerCard.className = "panel card live-scanner-card";
   liveScannerCard.innerHTML = `<h2>Live Sky Scanner</h2>`;
-  skyCard.insertAdjacentElement("afterend", liveScannerCard);
+  skyCard.insertAdjacentElement("beforebegin", liveScannerCard);
   liveScannerCard.appendChild(liveCameraBlock);
 
   const nestedLiveTitle = liveCameraBlock.querySelector("h3");
