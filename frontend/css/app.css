@@ -1428,6 +1428,20 @@ select:focus,
   gap: 9px;
 }
 
+.chat-suggestions {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chat-suggestion {
+  min-height: 38px;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .chat-bubble {
   padding: 9px 12px;
   border-radius: 12px;
@@ -1446,9 +1460,46 @@ select:focus,
   background: rgba(0, 184, 164, 0.18);
 }
 
+.chat-typing {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+}
+
+.chat-typing span {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--brand-2) 70%, var(--text));
+  animation: chat-typing-bounce 1s infinite ease-in-out;
+}
+
+.chat-typing span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.chat-typing span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
 .chat-input-row {
   margin-top: 10px;
   grid-template-columns: minmax(0, 1fr) auto;
+}
+
+@keyframes chat-typing-bounce {
+  0%,
+  80%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.45;
+  }
+
+  40% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
 }
 
 #analytics .card {

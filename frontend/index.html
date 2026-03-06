@@ -14,7 +14,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="/css/app.css?v=20260306-24">
+  <link rel="stylesheet" href="/css/app.css?v=20260306-25">
 </head>
 <body>
   <div class="app-shell" id="appShell">
@@ -332,6 +332,12 @@
       <section class="chatbot panel">
         <h2>Weather Chatbot</h2>
         <div id="chatLog" class="chat-log"></div>
+        <div id="chatPromptSuggestions" class="chat-suggestions">
+          <button class="chip chat-suggestion" type="button" data-chat-prompt="Will it rain tomorrow?">Will it rain tomorrow?</button>
+          <button class="chip chat-suggestion" type="button" data-chat-prompt="Show wind map">Show wind map</button>
+          <button class="chip chat-suggestion" type="button" data-chat-prompt="Explain thunderstorm">Explain thunderstorm</button>
+          <button class="chip chat-suggestion" type="button" data-chat-prompt="Best time for travel today">Best time for travel today</button>
+        </div>
         <div class="chat-input-row">
           <input id="chatInput" type="text" placeholder="Ask about weather or anything else">
           <button id="chatSendBtn" class="primary-btn" type="button">Ask</button>
@@ -343,7 +349,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet-velocity/dist/leaflet-velocity.min.js"></script>
-  <script src="/js/app.js?v=20260306-25"></script>
+  <script src="/js/app.js?v=20260306-26"></script>
 </body>
 </html>
 
