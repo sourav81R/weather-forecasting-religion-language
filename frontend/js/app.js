@@ -1,5 +1,5 @@
 const CACHE_KEY = "weather-studio-cache-v2";
-const PWA_CACHE_NAME = "weather-studio-pwa-v25";
+const PWA_CACHE_NAME = "weather-studio-pwa-v26";
 const FAVORITES_KEY = "weather-studio-favorites-v2";
 const LAST_COORDS_KEY = "weather-studio-last-coords-v2";
 const WEATHER_HISTORY_DB_NAME = "weather-studio-history-v1";
@@ -1658,8 +1658,42 @@ function renderActivity() {
     return;
   }
   el.activityList.innerHTML = activities
-    .map((item) => `<div class="list-item"><strong>${capitalize(item.activity)}</strong> <span class="muted">${item.score}/100</span><div>${item.recommendation}</div></div>`)
+    .map((item) => {
+      const scoreRaw = Number(item.score);
+      const score = Number.isFinite(scoreRaw) ? Math.max(0, Math.min(100, scoreRaw)) : 0;
+      const scoreLabel = Number.isFinite(scoreRaw) ? `${score.toFixed(1)}/100` : "--";
+      const tone = score >= 75 ? "high" : score >= 50 ? "medium" : "low";
+      return `
+        <div class="list-item activity-item">
+          <div class="activity-item-head">
+            <strong>${escapeHtml(capitalize(item.activity))}</strong>
+            <span class="score-pill ${tone}">${escapeHtml(scoreLabel)}</span>
+          </div>
+          <div class="activity-meter"><span style="width:${score.toFixed(1)}%;"></span></div>
+          <p class="activity-note">${escapeHtml(String(item.recommendation || ""))}</p>
+        </div>
+      `;
+    })
     .join("");
+}
+
+function signalItemMarkup(label, value, options = {}) {
+  const meterPercent = Number.isFinite(Number(options.meterPercent))
+    ? Math.max(0, Math.min(100, Number(options.meterPercent)))
+    : null;
+  const tone = options.tone ? ` ${options.tone}` : "";
+  const meter = meterPercent === null
+    ? ""
+    : `<div class="signal-meter${tone}"><span style="width:${meterPercent.toFixed(1)}%;"></span></div>`;
+  return `
+    <div class="list-item signal-item">
+      <div class="signal-item-head">
+        <span>${escapeHtml(label)}</span>
+        <strong>${escapeHtml(value)}</strong>
+      </div>
+      ${meter}
+    </div>
+  `;
 }
 
 function renderMlPrediction() {
@@ -1679,15 +1713,24 @@ function renderMlPrediction() {
       temp = `${tempC.toFixed(1)}\u00B0C`;
     }
   }
-  const rain = Number.isFinite(Number(prediction.rainProbability)) ? `${Math.round(Number(prediction.rainProbability) * 100)}%` : "--";
-  const confidence = Number.isFinite(Number(prediction.confidence)) ? `${Math.round(Number(prediction.confidence) * 100)}%` : "--";
+  const rainPercent = Number.isFinite(Number(prediction.rainProbability)) ? Math.round(Number(prediction.rainProbability) * 100) : null;
+  const confidencePercent = Number.isFinite(Number(prediction.confidence)) ? Math.round(Number(prediction.confidence) * 100) : null;
+  const rain = rainPercent !== null ? `${rainPercent}%` : "--";
+  const confidence = confidencePercent !== null ? `${confidencePercent}%` : "--";
   const humidityTrend = prediction.humidityTrend || "--";
+  const trendText = capitalize(String(humidityTrend));
+  const trendTone = trendText.toLowerCase() === "increasing" ? "hot" : trendText.toLowerCase() === "decreasing" ? "cool" : "neutral";
 
   el.mlPredictionList.innerHTML = [
-    `<div class="list-item"><strong>Temperature Tomorrow</strong><div>${temp}</div></div>`,
-    `<div class="list-item"><strong>Rain Probability</strong><div>${rain}</div></div>`,
-    `<div class="list-item"><strong>Confidence</strong><div>${confidence}</div></div>`,
-    `<div class="list-item"><strong>Humidity Trend</strong><div>${capitalize(String(humidityTrend))}</div></div>`,
+    signalItemMarkup("Temperature Tomorrow", temp),
+    signalItemMarkup("Rain Probability", rain, { meterPercent: rainPercent, tone: "rain" }),
+    signalItemMarkup("Confidence", confidence, { meterPercent: confidencePercent, tone: "confidence" }),
+    `<div class="list-item signal-item">
+      <div class="signal-item-head">
+        <span>Humidity Trend</span>
+        <strong><span class="trend-pill ${trendTone}">${escapeHtml(trendText)}</span></strong>
+      </div>
+    </div>`,
   ].join("");
 }
 
@@ -1703,20 +1746,31 @@ function renderHyperlocalPrediction() {
   const temp = Number.isFinite(Number(prediction.temperaturePrediction))
     ? formatTemperatureByUnits(Number(prediction.temperaturePrediction), units)
     : "--";
-  const rain = Number.isFinite(Number(prediction.rainProbability)) ? `${Math.round(Number(prediction.rainProbability) * 100)}%` : "--";
-  const storm = Number.isFinite(Number(prediction.stormRisk)) ? `${Math.round(Number(prediction.stormRisk) * 100)}%` : "--";
-  const confidence = Number.isFinite(Number(prediction.confidenceScore)) ? `${Math.round(Number(prediction.confidenceScore) * 100)}%` : "--";
+  const rainPercent = Number.isFinite(Number(prediction.rainProbability)) ? Math.round(Number(prediction.rainProbability) * 100) : null;
+  const stormPercent = Number.isFinite(Number(prediction.stormRisk)) ? Math.round(Number(prediction.stormRisk) * 100) : null;
+  const confidencePercent = Number.isFinite(Number(prediction.confidenceScore)) ? Math.round(Number(prediction.confidenceScore) * 100) : null;
+  const rain = rainPercent !== null ? `${rainPercent}%` : "--";
+  const storm = stormPercent !== null ? `${stormPercent}%` : "--";
+  const confidence = confidencePercent !== null ? `${confidencePercent}%` : "--";
   const sources = (prediction.sourcesUsed || [])
     .map((item) => String(item).replaceAll("_", " "))
     .map((item) => capitalize(item))
-    .join(", ");
+    .filter(Boolean);
+  const sourcesMarkup = sources.length
+    ? sources.map((item) => `<span class="source-chip">${escapeHtml(item)}</span>`).join("")
+    : `<span class="source-chip">--</span>`;
 
   el.hyperlocalPredictionList.innerHTML = [
-    `<div class="list-item"><strong>Predicted Temperature</strong><div>${escapeHtml(temp)}</div></div>`,
-    `<div class="list-item"><strong>Rain Probability</strong><div>${escapeHtml(rain)}</div></div>`,
-    `<div class="list-item"><strong>Storm Risk</strong><div>${escapeHtml(storm)}</div></div>`,
-    `<div class="list-item"><strong>Confidence Score</strong><div>${escapeHtml(confidence)}</div></div>`,
-    `<div class="list-item"><strong>Sources Used</strong><div>${escapeHtml(sources || "--")}</div></div>`,
+    signalItemMarkup("Predicted Temperature", temp),
+    signalItemMarkup("Rain Probability", rain, { meterPercent: rainPercent, tone: "rain" }),
+    signalItemMarkup("Storm Risk", storm, { meterPercent: stormPercent, tone: "storm" }),
+    signalItemMarkup("Confidence Score", confidence, { meterPercent: confidencePercent, tone: "confidence" }),
+    `<div class="list-item signal-item signal-sources">
+      <div class="signal-item-head">
+        <span>Sources Used</span>
+      </div>
+      <div class="source-chip-row">${sourcesMarkup}</div>
+    </div>`,
   ].join("");
 }
 
