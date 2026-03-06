@@ -1,5 +1,5 @@
 const CACHE_KEY = "weather-studio-cache-v2";
-const PWA_CACHE_NAME = "weather-studio-pwa-v24";
+const PWA_CACHE_NAME = "weather-studio-pwa-v27";
 const FAVORITES_KEY = "weather-studio-favorites-v2";
 const LAST_COORDS_KEY = "weather-studio-last-coords-v2";
 const WEATHER_HISTORY_DB_NAME = "weather-studio-history-v1";
@@ -83,6 +83,18 @@ const CROP_PROFILES = {
   potato: { tempMin: 10, tempMax: 24, weeklyRainMm: 18 },
   cotton: { tempMin: 21, tempMax: 34, weeklyRainMm: 22 },
 };
+const SKY_CONDITION_RAIN_MAP = {
+  clear_sky: 0.05,
+  overcast: 0.4,
+  rain_clouds: 0.65,
+  storm_clouds: 0.85,
+};
+const SKY_STORM_FACTOR_MAP = {
+  clear_sky: 0.05,
+  overcast: 0.3,
+  rain_clouds: 0.62,
+  storm_clouds: 0.92,
+};
 
 const el = {
   appShell: document.getElementById("appShell"),
@@ -108,6 +120,7 @@ const el = {
   aiSummary: document.getElementById("aiSummary"),
   activityList: document.getElementById("activityList"),
   mlPredictionList: document.getElementById("mlPredictionList"),
+  hyperlocalPredictionList: document.getElementById("hyperlocalPredictionList"),
   offlineForecastCard: document.getElementById("offlineForecastCard"),
   offlineForecastTemp: document.getElementById("offlineForecastTemp"),
   offlineForecastRain: document.getElementById("offlineForecastRain"),
@@ -174,6 +187,7 @@ const state = {
   analytics: null,
   activity: null,
   mlPrediction: null,
+  hyperlocalPrediction: null,
   skyAnalysis: null,
   alerts: [],
   coords: null,
@@ -460,6 +474,15 @@ async function initializeWeatherMapController() {
       stormIndicatorId: "mapStormIndicator",
       stormListId: "mapStormList",
       onStatus: (text, tone) => setStatus(text, tone),
+      getHyperlocalPrediction: ({ latitude, longitude, mapWeather }) =>
+        fetchHyperlocalPrediction({
+          latitude,
+          longitude,
+          mapWeather,
+          skyCondition: inferSkyCondition(),
+          updateState: false,
+          suppressStatus: true,
+        }),
       onLocationSelected: ({ latitude, longitude }) => {
         state.coords = { latitude: Number(latitude), longitude: Number(longitude) };
         localStorage.setItem(LAST_COORDS_KEY, JSON.stringify(state.coords));
@@ -1323,8 +1346,131 @@ function cacheKeyFromPayload(payload) {
   return `coords:${Number(payload.latitude).toFixed(2)},${Number(payload.longitude).toFixed(2)}:${payload.units}`;
 }
 
+function normalizeSkyCondition(value) {
+  const key = String(value || "").trim().toLowerCase();
+  if (key && SKY_CONDITION_RAIN_MAP[key] !== undefined) return key;
+  return "clear_sky";
+}
+
+function inferSkyCondition() {
+  const fromSkyAnalysis = normalizeSkyCondition(state.skyAnalysis?.sky_condition);
+  if (fromSkyAnalysis !== "clear_sky" || String(state.skyAnalysis?.sky_condition || "").trim()) {
+    return fromSkyAnalysis;
+  }
+
+  const condition = String(state.current?.condition || "").toLowerCase();
+  if (condition.includes("thunder")) return "storm_clouds";
+  if (condition.includes("rain") || condition.includes("drizzle")) return "rain_clouds";
+  if (condition.includes("cloud")) return "overcast";
+  return "clear_sky";
+}
+
+function normalizeHyperlocalPrediction(payload) {
+  if (!payload || typeof payload !== "object") return null;
+  const sources = Array.isArray(payload.sources_used) ? payload.sources_used.map((item) => String(item)) : [];
+  return {
+    temperaturePrediction: safeNumber(payload.temperature_prediction),
+    rainProbability: safeNumber(payload.rain_probability),
+    stormRisk: safeNumber(payload.storm_risk),
+    confidenceScore: safeNumber(payload.confidence_score),
+    sourcesUsed: sources,
+  };
+}
+
+function staticBuildHyperlocalPrediction({ latitude: _latitude, longitude: _longitude, skyCondition, mapWeather = null }) {
+  const normalizedSky = normalizeSkyCondition(skyCondition);
+  const skyRain = SKY_CONDITION_RAIN_MAP[normalizedSky] ?? 0.05;
+  const skyStorm = SKY_STORM_FACTOR_MAP[normalizedSky] ?? 0.05;
+  const forecastDay = (state.forecast?.daily || [])[0] || {};
+  const forecastTemp =
+    Number.isFinite(Number(forecastDay.maxTemp)) && Number.isFinite(Number(forecastDay.minTemp))
+      ? (Number(forecastDay.maxTemp) + Number(forecastDay.minTemp)) / 2
+      : null;
+
+  const apiTemp = safeNumber(mapWeather?.temperature)
+    ?? safeNumber(forecastTemp)
+    ?? canonicalTemperatureC(state.current);
+  const apiRain = clamp01(
+    (safeNumber(mapWeather?.rainProbability) ?? safeNumber(forecastDay.rainProbability) ?? 0) / 100
+  );
+  const mlTemp = safeNumber(state.mlPrediction?.temperature);
+  const mlRain = clamp01(safeNumber(state.mlPrediction?.rainProbability) ?? 0);
+  const satelliteWind = safeNumber(mapWeather?.windSpeed) ?? canonicalWindKmh(state.current) ?? 0;
+  const satelliteRainIntensity = safeNumber(mapWeather?.precipitation) ?? 0;
+  const satelliteRain = clamp01((0.82 * clamp01(satelliteRainIntensity / 6)) + (0.18 * clamp01(satelliteWind / 90)));
+
+  const tempNumerator = (Number.isFinite(apiTemp) ? apiTemp * 0.4 : 0) + (Number.isFinite(mlTemp) ? mlTemp * 0.3 : 0);
+  const tempDenominator = (Number.isFinite(apiTemp) ? 0.4 : 0) + (Number.isFinite(mlTemp) ? 0.3 : 0);
+  const finalTemp = tempDenominator > 0 ? tempNumerator / tempDenominator : null;
+
+  const rainNumerator = (apiRain * 0.4) + (mlRain * 0.3) + (skyRain * 0.2) + (satelliteRain * 0.1);
+  const finalRain = clamp01(rainNumerator);
+  const stormRisk = clamp01((0.58 * finalRain) + (0.27 * clamp01(satelliteWind / 70)) + (0.15 * skyStorm));
+
+  return {
+    temperature_prediction: Number.isFinite(Number(finalTemp)) ? Number(finalTemp.toFixed(1)) : null,
+    rain_probability: Number(finalRain.toFixed(2)),
+    storm_risk: Number(stormRisk.toFixed(2)),
+    confidence_score: 0.56,
+    sources_used: ["api_forecast", "ml_model", "sky_image", "satellite_data"],
+  };
+}
+
+async function fetchHyperlocalPrediction(options = {}) {
+  const latitude = safeNumber(options.latitude ?? state.coords?.latitude);
+  const longitude = safeNumber(options.longitude ?? state.coords?.longitude);
+  if (latitude === null || longitude === null) {
+    if (options.updateState !== false) {
+      state.hyperlocalPrediction = null;
+      renderHyperlocalPrediction();
+    }
+    return null;
+  }
+
+  const skyCondition = normalizeSkyCondition(options.skyCondition ?? inferSkyCondition());
+  let raw = null;
+  let requestError = null;
+
+  if (!state.staticMode) {
+    try {
+      raw = await apiRequest("/api/hyperlocal/predict", {
+        method: "POST",
+        body: JSON.stringify({
+          lat: latitude,
+          lon: longitude,
+          sky_condition: skyCondition,
+        }),
+      });
+    } catch (error) {
+      requestError = error;
+    }
+  }
+
+  if (!raw) {
+    raw = staticBuildHyperlocalPrediction({
+      latitude,
+      longitude,
+      skyCondition,
+      mapWeather: options.mapWeather || null,
+    });
+  }
+
+  const normalized = normalizeHyperlocalPrediction(raw);
+  if (options.updateState !== false) {
+    state.hyperlocalPrediction = normalized;
+    renderHyperlocalPrediction();
+  }
+
+  if (requestError && !options.suppressStatus && !state.staticMode) {
+    setStatus(`Hyperlocal model fallback active: ${requestError.message}`, "error");
+  }
+  return normalized;
+}
+
 async function loadPlatformBundle(location = {}) {
   const payload = { ...currentPayload(), ...location };
+  state.hyperlocalPrediction = null;
+  renderHyperlocalPrediction();
   const key = cacheKeyFromPayload(payload);
   if (!navigator.onLine) {
     setOfflineModeUi(true, OFFLINE_MODE_BANNER_TEXT);
@@ -1406,6 +1552,7 @@ function applyBundle(bundle, options = {}) {
   state.analytics = bundle.analytics;
   state.activity = bundle.activity;
   state.mlPrediction = bundle.mlPrediction || bundle.ml_prediction || null;
+  state.hyperlocalPrediction = normalizeHyperlocalPrediction(bundle.hyperlocalPrediction || bundle.hyperlocal_prediction || null);
   state.alerts = bundle.alerts || [];
   state.offlineMode = Boolean(options.offlineMode);
   state.offlineForecast = bundle.offlineForecast || null;
@@ -1421,6 +1568,7 @@ function applyBundle(bundle, options = {}) {
   renderAnalytics();
   renderActivity();
   renderMlPrediction();
+  renderHyperlocalPrediction();
   renderOfflineForecastCard();
   renderAlerts(state.alerts);
   renderAiSummary(bundle.aiSummary);
@@ -1434,6 +1582,14 @@ function applyBundle(bundle, options = {}) {
     });
   }
   void loadClimateInsights();
+  if (state.coords) {
+    void fetchHyperlocalPrediction({
+      latitude: state.coords.latitude,
+      longitude: state.coords.longitude,
+      skyCondition: inferSkyCondition(),
+      suppressStatus: true,
+    });
+  }
 }
 
 function renderCurrent() {
@@ -1502,8 +1658,42 @@ function renderActivity() {
     return;
   }
   el.activityList.innerHTML = activities
-    .map((item) => `<div class="list-item"><strong>${capitalize(item.activity)}</strong> <span class="muted">${item.score}/100</span><div>${item.recommendation}</div></div>`)
+    .map((item) => {
+      const scoreRaw = Number(item.score);
+      const score = Number.isFinite(scoreRaw) ? Math.max(0, Math.min(100, scoreRaw)) : 0;
+      const scoreLabel = Number.isFinite(scoreRaw) ? `${score.toFixed(1)}/100` : "--";
+      const tone = score >= 75 ? "high" : score >= 50 ? "medium" : "low";
+      return `
+        <div class="list-item activity-item">
+          <div class="activity-item-head">
+            <strong>${escapeHtml(capitalize(item.activity))}</strong>
+            <span class="score-pill ${tone}">${escapeHtml(scoreLabel)}</span>
+          </div>
+          <div class="activity-meter"><span style="width:${score.toFixed(1)}%;"></span></div>
+          <p class="activity-note">${escapeHtml(String(item.recommendation || ""))}</p>
+        </div>
+      `;
+    })
     .join("");
+}
+
+function signalItemMarkup(label, value, options = {}) {
+  const meterPercent = Number.isFinite(Number(options.meterPercent))
+    ? Math.max(0, Math.min(100, Number(options.meterPercent)))
+    : null;
+  const tone = options.tone ? ` ${options.tone}` : "";
+  const meter = meterPercent === null
+    ? ""
+    : `<div class="signal-meter${tone}"><span style="width:${meterPercent.toFixed(1)}%;"></span></div>`;
+  return `
+    <div class="list-item signal-item">
+      <div class="signal-item-head">
+        <span>${escapeHtml(label)}</span>
+        <strong>${escapeHtml(value)}</strong>
+      </div>
+      ${meter}
+    </div>
+  `;
 }
 
 function renderMlPrediction() {
@@ -1523,15 +1713,64 @@ function renderMlPrediction() {
       temp = `${tempC.toFixed(1)}\u00B0C`;
     }
   }
-  const rain = Number.isFinite(Number(prediction.rainProbability)) ? `${Math.round(Number(prediction.rainProbability) * 100)}%` : "--";
-  const confidence = Number.isFinite(Number(prediction.confidence)) ? `${Math.round(Number(prediction.confidence) * 100)}%` : "--";
+  const rainPercent = Number.isFinite(Number(prediction.rainProbability)) ? Math.round(Number(prediction.rainProbability) * 100) : null;
+  const confidencePercent = Number.isFinite(Number(prediction.confidence)) ? Math.round(Number(prediction.confidence) * 100) : null;
+  const rain = rainPercent !== null ? `${rainPercent}%` : "--";
+  const confidence = confidencePercent !== null ? `${confidencePercent}%` : "--";
   const humidityTrend = prediction.humidityTrend || "--";
+  const trendText = capitalize(String(humidityTrend));
+  const trendTone = trendText.toLowerCase() === "increasing" ? "hot" : trendText.toLowerCase() === "decreasing" ? "cool" : "neutral";
 
   el.mlPredictionList.innerHTML = [
-    `<div class="list-item"><strong>Temperature Tomorrow</strong><div>${temp}</div></div>`,
-    `<div class="list-item"><strong>Rain Probability</strong><div>${rain}</div></div>`,
-    `<div class="list-item"><strong>Confidence</strong><div>${confidence}</div></div>`,
-    `<div class="list-item"><strong>Humidity Trend</strong><div>${capitalize(String(humidityTrend))}</div></div>`,
+    signalItemMarkup("Temperature Tomorrow", temp),
+    signalItemMarkup("Rain Probability", rain, { meterPercent: rainPercent, tone: "rain" }),
+    signalItemMarkup("Confidence", confidence, { meterPercent: confidencePercent, tone: "confidence" }),
+    `<div class="list-item signal-item">
+      <div class="signal-item-head">
+        <span>Humidity Trend</span>
+        <strong><span class="trend-pill ${trendTone}">${escapeHtml(trendText)}</span></strong>
+      </div>
+    </div>`,
+  ].join("");
+}
+
+function renderHyperlocalPrediction() {
+  if (!el.hyperlocalPredictionList) return;
+  const prediction = state.hyperlocalPrediction;
+  if (!prediction) {
+    el.hyperlocalPredictionList.innerHTML = `<div class="list-item">Hyperlocal prediction unavailable.</div>`;
+    return;
+  }
+
+  const units = el.unitsSelect?.value === "imperial" ? "imperial" : "metric";
+  const temp = Number.isFinite(Number(prediction.temperaturePrediction))
+    ? formatTemperatureByUnits(Number(prediction.temperaturePrediction), units)
+    : "--";
+  const rainPercent = Number.isFinite(Number(prediction.rainProbability)) ? Math.round(Number(prediction.rainProbability) * 100) : null;
+  const stormPercent = Number.isFinite(Number(prediction.stormRisk)) ? Math.round(Number(prediction.stormRisk) * 100) : null;
+  const confidencePercent = Number.isFinite(Number(prediction.confidenceScore)) ? Math.round(Number(prediction.confidenceScore) * 100) : null;
+  const rain = rainPercent !== null ? `${rainPercent}%` : "--";
+  const storm = stormPercent !== null ? `${stormPercent}%` : "--";
+  const confidence = confidencePercent !== null ? `${confidencePercent}%` : "--";
+  const sources = (prediction.sourcesUsed || [])
+    .map((item) => String(item).replaceAll("_", " "))
+    .map((item) => capitalize(item))
+    .filter(Boolean);
+  const sourcesMarkup = sources.length
+    ? sources.map((item) => `<span class="source-chip">${escapeHtml(item)}</span>`).join("")
+    : `<span class="source-chip">--</span>`;
+
+  el.hyperlocalPredictionList.innerHTML = [
+    signalItemMarkup("Predicted Temperature", temp),
+    signalItemMarkup("Rain Probability", rain, { meterPercent: rainPercent, tone: "rain" }),
+    signalItemMarkup("Storm Risk", storm, { meterPercent: stormPercent, tone: "storm" }),
+    signalItemMarkup("Confidence Score", confidence, { meterPercent: confidencePercent, tone: "confidence" }),
+    `<div class="list-item signal-item signal-sources">
+      <div class="signal-item-head">
+        <span>Sources Used</span>
+      </div>
+      <div class="source-chip-row">${sourcesMarkup}</div>
+    </div>`,
   ].join("");
 }
 
@@ -2139,6 +2378,14 @@ async function analyzeSkyImage() {
     state.skyAnalysis = result;
     renderSkyAnalysis(result);
     renderLiveSkyAnalysis(result);
+    if (state.coords) {
+      void fetchHyperlocalPrediction({
+        latitude: state.coords.latitude,
+        longitude: state.coords.longitude,
+        skyCondition: normalizeSkyCondition(result.sky_condition),
+        suppressStatus: true,
+      });
+    }
     setStatus(state.staticMode ? "Sky image analyzed in static mode." : "Sky image analysis complete.", "success");
   } catch (error) {
     renderSkyAnalysis(null);
@@ -2239,6 +2486,14 @@ async function captureLiveSkyFrame(options = {}) {
     state.skyAnalysis = result;
     renderSkyAnalysis(result);
     renderLiveSkyAnalysis(result);
+    if (state.coords) {
+      void fetchHyperlocalPrediction({
+        latitude: state.coords.latitude,
+        longitude: state.coords.longitude,
+        skyCondition: normalizeSkyCondition(result.sky_condition),
+        suppressStatus: true,
+      });
+    }
     if (fromLiveScan) {
       setLiveCameraStatus("Live scan updated.");
     } else {
@@ -2468,6 +2723,27 @@ function setupResponsiveSidebar() {
   window.addEventListener("resize", () => {
     if (!isMobileNavViewport()) closeSidebarNav();
   });
+}
+
+function ensureSeparateLiveScannerCard() {
+  const plannerGrid = document.querySelector("#planner .grid.cols-2");
+  const liveCameraBlock = document.querySelector(".live-camera-block");
+  if (!plannerGrid || !liveCameraBlock) return;
+  if (plannerGrid.querySelector(".live-scanner-card")) return;
+
+  const skyCard = liveCameraBlock.closest("article.panel.card");
+  if (!skyCard) return;
+  const skyTitle = skyCard.querySelector("h2");
+  if (!skyTitle || !/sky photo weather detection/i.test(String(skyTitle.textContent || ""))) return;
+
+  const liveScannerCard = document.createElement("article");
+  liveScannerCard.className = "panel card live-scanner-card";
+  liveScannerCard.innerHTML = `<h2>Live Sky Scanner</h2>`;
+  skyCard.insertAdjacentElement("afterend", liveScannerCard);
+  liveScannerCard.appendChild(liveCameraBlock);
+
+  const nestedLiveTitle = liveCameraBlock.querySelector("h3");
+  if (nestedLiveTitle) nestedLiveTitle.remove();
 }
 
 function setupQuickCities() {
@@ -2913,6 +3189,7 @@ async function initialize() {
 
   setupSectionNavigation();
   setupResponsiveSidebar();
+  ensureSeparateLiveScannerCard();
   setupQuickCities();
   renderLocalFavorites();
   setupFavoritesEvents();

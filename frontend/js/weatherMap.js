@@ -384,6 +384,7 @@ class WeatherMapController {
     this.builtinApiKeys = Array.isArray(options.builtinApiKeys) ? options.builtinApiKeys.filter(Boolean) : [];
     this.onStatus = typeof options.onStatus === "function" ? options.onStatus : () => {};
     this.onLocationSelected = typeof options.onLocationSelected === "function" ? options.onLocationSelected : null;
+    this.getHyperlocalPrediction = typeof options.getHyperlocalPrediction === "function" ? options.getHyperlocalPrediction : null;
     this.containerId = options.containerId || "weatherMap";
 
     this.map = null;
@@ -581,28 +582,23 @@ class WeatherMapController {
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
     try {
       const point = await this._fetchPointData(lat, lon, this.hourOffset, { bypassCache: true });
-      const risk = stormRiskLabel(point.stormRisk);
-      const popupHtml = [
-        "<div class=\"map-inspector-popup\">",
-        "<h4>Weather Inspector</h4>",
-        `<p class=\"map-inspector-location\">${lat.toFixed(3)}, ${lon.toFixed(3)}</p>`,
-        "<div class=\"map-inspector-grid\">",
-        `<div><span>Temperature</span><strong>${point.temperature.toFixed(1)} C</strong></div>`,
-        `<div><span>Humidity</span><strong>${Math.round(point.humidity)}%</strong></div>`,
-        `<div><span>Wind Speed</span><strong>${point.windSpeed.toFixed(1)} km/h</strong></div>`,
-        `<div><span>Wind Direction</span><strong>${Math.round(point.windDirection)} deg</strong></div>`,
-        `<div><span>Rain Probability</span><strong>${Math.round(point.rainProbability)}%</strong></div>`,
-        `<div><span>Cloud Coverage</span><strong>${Math.round(point.cloudCoverage)}%</strong></div>`,
-        `<div><span>Storm Risk</span><strong>${escapeHtml(risk)}</strong></div>`,
-        `<div><span>Forecast Time</span><strong>${escapeHtml(point.timeUtc)}</strong></div>`,
-        "</div>",
-        "</div>",
-      ].join("");
-
-      window.L.popup({ maxWidth: 340 })
+      const popup = window.L.popup({ maxWidth: 360 })
         .setLatLng([lat, lon])
-        .setContent(popupHtml)
+        .setContent(this._inspectorPopupHtml({ lat, lon, point, hyperlocal: null, loading: Boolean(this.getHyperlocalPrediction) }))
         .openOn(this.map);
+
+      if (this.getHyperlocalPrediction) {
+        try {
+          const hyperlocal = await this.getHyperlocalPrediction({
+            latitude: lat,
+            longitude: lon,
+            mapWeather: point,
+          });
+          popup.setContent(this._inspectorPopupHtml({ lat, lon, point, hyperlocal, loading: false }));
+        } catch {
+          popup.setContent(this._inspectorPopupHtml({ lat, lon, point, hyperlocal: null, loading: false }));
+        }
+      }
 
       if (this.onLocationSelected) {
         this.onLocationSelected({ latitude: lat, longitude: lon });
@@ -610,6 +606,61 @@ class WeatherMapController {
     } catch (error) {
       this.onStatus(`Map inspector failed: ${error.message}`, "error");
     }
+  }
+
+  _inspectorPopupHtml({ lat, lon, point, hyperlocal, loading = false }) {
+    const risk = stormRiskLabel(point.stormRisk);
+    const weatherSection = [
+      "<div class=\"map-inspector-popup\">",
+      "<h4>Weather Inspector</h4>",
+      `<p class=\"map-inspector-location\">${lat.toFixed(3)}, ${lon.toFixed(3)}</p>`,
+      "<div class=\"map-inspector-grid\">",
+      `<div><span>Temperature</span><strong>${point.temperature.toFixed(1)} C</strong></div>`,
+      `<div><span>Humidity</span><strong>${Math.round(point.humidity)}%</strong></div>`,
+      `<div><span>Wind Speed</span><strong>${point.windSpeed.toFixed(1)} km/h</strong></div>`,
+      `<div><span>Wind Direction</span><strong>${Math.round(point.windDirection)} deg</strong></div>`,
+      `<div><span>Rain Probability</span><strong>${Math.round(point.rainProbability)}%</strong></div>`,
+      `<div><span>Cloud Coverage</span><strong>${Math.round(point.cloudCoverage)}%</strong></div>`,
+      `<div><span>Storm Risk</span><strong>${escapeHtml(risk)}</strong></div>`,
+      `<div><span>Forecast Time</span><strong>${escapeHtml(point.timeUtc)}</strong></div>`,
+      "</div>",
+    ].join("");
+
+    if (loading) {
+      return `${weatherSection}<p class="map-inspector-loading">Loading hyperlocal AI forecast...</p></div>`;
+    }
+    if (!hyperlocal) {
+      return `${weatherSection}<p class="map-inspector-loading">Hyperlocal AI forecast unavailable.</p></div>`;
+    }
+    return `${weatherSection}${this._hyperlocalPopupHtml(hyperlocal)}</div>`;
+  }
+
+  _hyperlocalPopupHtml(hyperlocal) {
+    const temp = finiteNumber(hyperlocal.temperaturePrediction, NaN);
+    const rain = finiteNumber(hyperlocal.rainProbability, NaN);
+    const storm = finiteNumber(hyperlocal.stormRisk, NaN);
+    const confidence = finiteNumber(hyperlocal.confidenceScore, NaN);
+    const sources = Array.isArray(hyperlocal.sourcesUsed) ? hyperlocal.sourcesUsed : [];
+    const tempLabel = Number.isFinite(temp) ? `${temp.toFixed(1)} C` : "--";
+    const rainLabel = Number.isFinite(rain) ? `${Math.round(rain * 100)}%` : "--";
+    const stormLabel = Number.isFinite(storm) ? `${Math.round(storm * 100)}%` : "--";
+    const confidenceLabel = Number.isFinite(confidence) ? `${Math.round(confidence * 100)}%` : "--";
+    const sourceLabel = sources.length
+      ? sources.map((item) => String(item).replaceAll("_", " ")).join(", ")
+      : "--";
+
+    return [
+      "<div class=\"map-inspector-hyperlocal\">",
+      "<h5>Hyperlocal AI Forecast</h5>",
+      "<div class=\"map-inspector-grid\">",
+      `<div><span>Predicted Temp</span><strong>${escapeHtml(tempLabel)}</strong></div>`,
+      `<div><span>Rain Probability</span><strong>${escapeHtml(rainLabel)}</strong></div>`,
+      `<div><span>Storm Risk</span><strong>${escapeHtml(stormLabel)}</strong></div>`,
+      `<div><span>Confidence</span><strong>${escapeHtml(confidenceLabel)}</strong></div>`,
+      "</div>",
+      `<p class="map-inspector-sources"><strong>Sources:</strong> ${escapeHtml(sourceLabel)}</p>`,
+      "</div>",
+    ].join("");
   }
 
   _bindMapEvents() {

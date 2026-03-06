@@ -638,6 +638,249 @@ select:focus,
   overflow-wrap: anywhere;
 }
 
+#metricGrid .metric {
+  position: relative;
+  overflow: hidden;
+  border-color: color-mix(in srgb, var(--brand) 18%, var(--line));
+  background:
+    radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--brand-soft) 42%, transparent), transparent 64%),
+    linear-gradient(145deg, var(--panel-solid), rgba(255, 255, 255, 0.78));
+  box-shadow: 0 8px 18px rgba(18, 46, 81, 0.08);
+}
+
+#metricGrid .metric::after {
+  content: "";
+  position: absolute;
+  top: 9px;
+  right: 9px;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--brand) 66%, var(--brand-2));
+  opacity: 0.88;
+}
+
+#metricGrid .metric strong {
+  font-size: 15px;
+  letter-spacing: -0.15px;
+}
+
+.insights-card,
+.activity-card,
+.prediction-card {
+  position: relative;
+  overflow: hidden;
+  border-color: color-mix(in srgb, var(--brand) 20%, var(--line));
+}
+
+.insights-card::before,
+.activity-card::before,
+.prediction-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 14px;
+  right: 14px;
+  height: 3px;
+  border-radius: 999px;
+}
+
+.insights-card {
+  background:
+    radial-gradient(circle at 88% 8%, rgba(0, 184, 164, 0.16), transparent 42%),
+    radial-gradient(circle at 8% 100%, rgba(31, 111, 255, 0.12), transparent 48%),
+    linear-gradient(152deg, var(--panel), rgba(255, 255, 255, 0.58));
+}
+
+.insights-card::before {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--brand-2) 88%, transparent), color-mix(in srgb, var(--brand) 42%, transparent));
+}
+
+#aiSummary {
+  border: 1px solid color-mix(in srgb, var(--brand-2) 24%, var(--line));
+  border-radius: 14px;
+  padding: 11px 12px;
+  background:
+    linear-gradient(140deg, color-mix(in srgb, var(--panel-solid) 95%, transparent), color-mix(in srgb, var(--brand-soft) 12%, transparent));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.44);
+}
+
+.activity-card {
+  background:
+    radial-gradient(circle at 96% 6%, rgba(31, 111, 255, 0.17), transparent 44%),
+    linear-gradient(155deg, var(--panel), rgba(255, 255, 255, 0.56));
+}
+
+.activity-card::before {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--brand) 82%, transparent), color-mix(in srgb, #4bc8ff 45%, transparent));
+}
+
+.prediction-card {
+  background:
+    radial-gradient(circle at 96% 8%, rgba(0, 184, 164, 0.18), transparent 48%),
+    linear-gradient(160deg, var(--panel), rgba(255, 255, 255, 0.6));
+}
+
+.prediction-card::before {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--brand-2) 84%, transparent), color-mix(in srgb, var(--brand) 40%, transparent));
+}
+
+.ml-card {
+  border-color: color-mix(in srgb, #2480ff 28%, var(--line));
+}
+
+.hyperlocal-card {
+  border-color: color-mix(in srgb, #14b79e 32%, var(--line));
+}
+
+.activity-item {
+  display: grid;
+  gap: 8px;
+  border-color: color-mix(in srgb, var(--brand) 24%, var(--line));
+}
+
+.activity-item-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.activity-item-head strong {
+  font-size: 15px;
+}
+
+.score-pill {
+  border-radius: 999px;
+  padding: 3px 9px;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.2;
+  border: 1px solid transparent;
+}
+
+.score-pill.high {
+  color: #0d6f5e;
+  background: rgba(25, 184, 154, 0.18);
+  border-color: rgba(25, 184, 154, 0.3);
+}
+
+.score-pill.medium {
+  color: #7d5b06;
+  background: rgba(241, 196, 72, 0.2);
+  border-color: rgba(241, 196, 72, 0.36);
+}
+
+.score-pill.low {
+  color: #90374e;
+  background: rgba(214, 61, 85, 0.18);
+  border-color: rgba(214, 61, 85, 0.3);
+}
+
+.activity-meter,
+.signal-meter {
+  height: 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--line) 80%, transparent);
+  overflow: hidden;
+}
+
+.activity-meter span,
+.signal-meter span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--brand) 82%, transparent), color-mix(in srgb, var(--brand-2) 78%, transparent));
+}
+
+.activity-note {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.signal-item {
+  display: grid;
+  gap: 8px;
+  border-color: color-mix(in srgb, var(--brand) 20%, var(--line));
+}
+
+.signal-item-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.signal-item-head span {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.signal-item-head strong {
+  font-size: 15px;
+  letter-spacing: -0.2px;
+}
+
+.signal-meter.rain span {
+  background: linear-gradient(90deg, #2f8bfd, #10b7d9);
+}
+
+.signal-meter.storm span {
+  background: linear-gradient(90deg, #f2a528, #df5341);
+}
+
+.signal-meter.confidence span {
+  background: linear-gradient(90deg, #16b6a8, #3c85ff);
+}
+
+.trend-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.trend-pill.hot {
+  color: #9b384b;
+  background: rgba(214, 61, 85, 0.17);
+}
+
+.trend-pill.cool {
+  color: #1b5e9e;
+  background: rgba(47, 134, 224, 0.18);
+}
+
+.trend-pill.neutral {
+  color: #42607e;
+  background: rgba(91, 116, 143, 0.16);
+}
+
+.source-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.source-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 9px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--brand) 28%, var(--line));
+  background: color-mix(in srgb, var(--brand-soft) 44%, var(--panel-solid));
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .forecast-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -870,6 +1113,36 @@ select:focus,
   background: color-mix(in srgb, var(--panel-solid) 92%, transparent);
   display: grid;
   gap: 10px;
+}
+
+.sky-photo-card,
+.live-scanner-card {
+  align-self: start;
+}
+
+.live-scanner-card .live-camera-block {
+  margin-top: 0;
+}
+
+/* Fallback: if an older cached HTML still nests live scanner in sky card, use right-side column. */
+#planner .grid.cols-2 > article.panel.card:has(.live-camera-block):not(.live-scanner-card) {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+
+#planner .grid.cols-2 > article.panel.card:has(.live-camera-block):not(.live-scanner-card) > h2,
+#planner .grid.cols-2 > article.panel.card:has(.live-camera-block):not(.live-scanner-card) > .form-grid,
+#planner .grid.cols-2 > article.panel.card:has(.live-camera-block):not(.live-scanner-card) > .sky-preview,
+#planner .grid.cols-2 > article.panel.card:has(.live-camera-block):not(.live-scanner-card) > #skyAnalysisResult {
+  grid-column: 1;
+}
+
+#planner .grid.cols-2 > article.panel.card:has(.live-camera-block):not(.live-scanner-card) > .live-camera-block {
+  grid-column: 2;
+  grid-row: 1 / span 5;
+  margin-top: 0;
 }
 
 .live-camera-block h3 {
@@ -1106,6 +1379,31 @@ select:focus,
   font-size: 13px;
 }
 
+.map-inspector-loading {
+  margin: 8px 0 0;
+  color: #56718f;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.map-inspector-hyperlocal {
+  margin-top: 9px;
+  padding-top: 8px;
+  border-top: 1px dashed #c7d7ea;
+}
+
+.map-inspector-hyperlocal h5 {
+  margin: 0 0 6px;
+  font-size: 13px;
+  letter-spacing: 0.2px;
+}
+
+.map-inspector-sources {
+  margin: 7px 0 0;
+  font-size: 11px;
+  color: #56718f;
+}
+
 .chatbot {
   padding: 16px;
 }
@@ -1248,6 +1546,16 @@ select:focus,
     height: 200px !important;
     max-height: 200px;
   }
+
+  #planner .grid.cols-2 > article.panel.card:has(.live-camera-block):not(.live-scanner-card) {
+    grid-template-columns: 1fr;
+  }
+
+  #planner .grid.cols-2 > article.panel.card:has(.live-camera-block):not(.live-scanner-card) > .live-camera-block {
+    grid-column: 1;
+    grid-row: auto;
+    margin-top: 12px;
+  }
 }
 
 @media (max-width: 900px) {
@@ -1324,6 +1632,13 @@ select:focus,
   .card h2,
   .chatbot h2 {
     font-size: clamp(18px, 7vw, 24px);
+  }
+
+  .activity-item-head,
+  .signal-item-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
   }
 
   .sidebar-toggle {
