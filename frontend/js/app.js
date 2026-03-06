@@ -1,5 +1,5 @@
 const CACHE_KEY = "weather-studio-cache-v2";
-const PWA_CACHE_NAME = "weather-studio-pwa-v26";
+const PWA_CACHE_NAME = "weather-studio-pwa-v27";
 const FAVORITES_KEY = "weather-studio-favorites-v2";
 const LAST_COORDS_KEY = "weather-studio-last-coords-v2";
 const WEATHER_HISTORY_DB_NAME = "weather-studio-history-v1";
@@ -2725,6 +2725,27 @@ function setupResponsiveSidebar() {
   });
 }
 
+function ensureSeparateLiveScannerCard() {
+  const plannerGrid = document.querySelector("#planner .grid.cols-2");
+  const liveCameraBlock = document.querySelector(".live-camera-block");
+  if (!plannerGrid || !liveCameraBlock) return;
+  if (plannerGrid.querySelector(".live-scanner-card")) return;
+
+  const skyCard = liveCameraBlock.closest("article.panel.card");
+  if (!skyCard) return;
+  const skyTitle = skyCard.querySelector("h2");
+  if (!skyTitle || !/sky photo weather detection/i.test(String(skyTitle.textContent || ""))) return;
+
+  const liveScannerCard = document.createElement("article");
+  liveScannerCard.className = "panel card live-scanner-card";
+  liveScannerCard.innerHTML = `<h2>Live Sky Scanner</h2>`;
+  skyCard.insertAdjacentElement("afterend", liveScannerCard);
+  liveScannerCard.appendChild(liveCameraBlock);
+
+  const nestedLiveTitle = liveCameraBlock.querySelector("h3");
+  if (nestedLiveTitle) nestedLiveTitle.remove();
+}
+
 function setupQuickCities() {
   el.quickCities.innerHTML = QUICK_CITIES.map((city) => `<button class="chip" data-city="${city}" type="button">${city}</button>`).join("");
   el.quickCities.addEventListener("click", (event) => {
@@ -3168,6 +3189,7 @@ async function initialize() {
 
   setupSectionNavigation();
   setupResponsiveSidebar();
+  ensureSeparateLiveScannerCard();
   setupQuickCities();
   renderLocalFavorites();
   setupFavoritesEvents();

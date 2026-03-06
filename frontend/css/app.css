@@ -1115,6 +1115,36 @@ select:focus,
   gap: 10px;
 }
 
+.sky-photo-card,
+.live-scanner-card {
+  align-self: start;
+}
+
+.live-scanner-card .live-camera-block {
+  margin-top: 0;
+}
+
+/* Fallback: if an older cached HTML still nests live scanner in sky card, use right-side column. */
+#planner .grid.cols-2 > article.panel.card:has(.live-camera-block):not(.live-scanner-card) {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+
+#planner .grid.cols-2 > article.panel.card:has(.live-camera-block):not(.live-scanner-card) > h2,
+#planner .grid.cols-2 > article.panel.card:has(.live-camera-block):not(.live-scanner-card) > .form-grid,
+#planner .grid.cols-2 > article.panel.card:has(.live-camera-block):not(.live-scanner-card) > .sky-preview,
+#planner .grid.cols-2 > article.panel.card:has(.live-camera-block):not(.live-scanner-card) > #skyAnalysisResult {
+  grid-column: 1;
+}
+
+#planner .grid.cols-2 > article.panel.card:has(.live-camera-block):not(.live-scanner-card) > .live-camera-block {
+  grid-column: 2;
+  grid-row: 1 / span 5;
+  margin-top: 0;
+}
+
 .live-camera-block h3 {
   margin: 0;
   font-size: 16px;
@@ -1515,6 +1545,16 @@ select:focus,
   #analytics .card canvas {
     height: 200px !important;
     max-height: 200px;
+  }
+
+  #planner .grid.cols-2 > article.panel.card:has(.live-camera-block):not(.live-scanner-card) {
+    grid-template-columns: 1fr;
+  }
+
+  #planner .grid.cols-2 > article.panel.card:has(.live-camera-block):not(.live-scanner-card) > .live-camera-block {
+    grid-column: 1;
+    grid-row: auto;
+    margin-top: 12px;
   }
 }
 

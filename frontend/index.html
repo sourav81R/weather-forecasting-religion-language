@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="/css/app.css?v=20260306-17">
+  <link rel="stylesheet" href="/css/app.css?v=20260306-18">
 </head>
 <body>
   <div class="app-shell" id="appShell">
@@ -205,7 +205,7 @@
             <div id="agriResult" class="list"></div>
           </article>
 
-          <article class="panel card">
+          <article class="panel card sky-photo-card">
             <h2>Sky Photo Weather Detection</h2>
             <div class="form-grid">
               <input id="skyImageInput" type="file" accept="image/*">
@@ -215,9 +215,11 @@
             <div id="skyAnalysisResult" class="list sky-analysis-list">
               <div class="list-item">Upload a sky photo to estimate cloud and rain risk.</div>
             </div>
+          </article>
 
+          <article class="panel card live-scanner-card">
+            <h2>Live Sky Scanner</h2>
             <div class="live-camera-block">
-              <h3>Live Sky Scanner</h3>
               <div class="camera-controls">
                 <button id="liveCameraStartBtn" class="primary-btn" type="button">Start Camera</button>
                 <button id="liveCameraStopBtn" class="ghost-btn" type="button" disabled>Stop Camera</button>
@@ -336,7 +338,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet-velocity/dist/leaflet-velocity.min.js"></script>
-  <script src="/js/app.js?v=20260306-17"></script>
+  <script src="/js/app.js?v=20260306-18"></script>
 </body>
 </html>
 
