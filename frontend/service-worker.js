@@ -1,4 +1,4 @@
-const CACHE_VERSION = "weather-studio-pwa-v31";
+const CACHE_VERSION = "weather-studio-pwa-v32";
 const UI_CACHE = `${CACHE_VERSION}-ui`;
 const DATA_CACHE = `${CACHE_VERSION}-data`;
 
@@ -11,14 +11,14 @@ const CORE_UI_ASSETS = [
   "/static/css/app.css",
   "/static/css/app.css?v=20260306-8",
   "/js/app.js",
-  "/js/app.js?v=20260306-22",
+  "/js/app.js?v=20260306-23",
   "/static/js/app.js",
-  "/static/js/app.js?v=20260306-10",
+  "/static/js/app.js?v=20260306-11",
   "/js/weatherMap.js",
   "/js/offlineForecast.js",
   "/js/liveCamera.js",
   "/frontend/css/app.css?v=20260306-18",
-  "/frontend/js/app.js?v=20260306-22",
+  "/frontend/js/app.js?v=20260306-23",
   "/frontend/js/weatherMap.js",
   "/frontend/js/offlineForecast.js",
   "/frontend/js/liveCamera.js",
@@ -115,7 +115,12 @@ self.addEventListener("install", (event) => {
       }
     })
   );
-  self.skipWaiting();
+});
+
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener("activate", (event) => {

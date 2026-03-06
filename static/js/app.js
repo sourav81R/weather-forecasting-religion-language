@@ -2102,6 +2102,8 @@ function setupPwa() {
   if (!el.installBtn) return;
   const isIosDevice = () => /iphone|ipad|ipod/.test(String(navigator?.userAgent || "").toLowerCase());
   const isAndroidDevice = () => String(navigator?.userAgent || "").toLowerCase().includes("android");
+  let pendingSwUpdate = null;
+  let reloadingForUpdate = false;
   const installContextSecure = () => {
     if (typeof window === "undefined") return true;
     if (window.isSecureContext) return true;
@@ -2118,6 +2120,23 @@ function setupPwa() {
     el.installBtn.hidden = false;
     el.installBtn.disabled = Boolean(disabled);
     el.installBtn.textContent = String(text || "Install App");
+  };
+  const setUpdateButton = () => {
+    setInstallButton("Update App", false);
+  };
+  const markUpdateReady = (registration) => {
+    if (!registration?.waiting) return;
+    if (!navigator.serviceWorker?.controller) return;
+    pendingSwUpdate = registration.waiting;
+    setUpdateButton();
+    setStatus("A new app update is available. Tap Update App to refresh.", "success");
+  };
+  const activatePendingUpdate = () => {
+    if (!pendingSwUpdate) return false;
+    setInstallButton("Updating...", true);
+    setStatus("Applying latest update...");
+    pendingSwUpdate.postMessage({ type: "SKIP_WAITING" });
+    return true;
   };
   const waitForInstallPrompt = (timeoutMs = 1800) =>
     new Promise((resolve) => {
@@ -2147,21 +2166,40 @@ function setupPwa() {
     return "On desktop, open browser menu and choose Install app.";
   };
 
-  if (isStandaloneInstalled()) {
+  const installedAtLoad = isStandaloneInstalled();
+  if (installedAtLoad) {
     setInstallButton("App Installed", true);
-    return;
+  } else {
+    setInstallButton("Install App", true);
   }
-  setInstallButton("Install App", true);
 
   if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (reloadingForUpdate) return;
+      if (!pendingSwUpdate) return;
+      reloadingForUpdate = true;
+      window.location.reload();
+    });
     navigator.serviceWorker
       .register("/service-worker.js")
-      .then((registration) => registration.update().catch(() => {}))
+      .then((registration) => {
+        markUpdateReady(registration);
+        registration.addEventListener("updatefound", () => {
+          const installingWorker = registration.installing;
+          if (!installingWorker) return;
+          installingWorker.addEventListener("statechange", () => {
+            if (installingWorker.state === "installed") {
+              markUpdateReady(registration);
+            }
+          });
+        });
+        return registration.update().catch(() => {});
+      })
       .catch(() => {
         setStatus("Service worker registration failed. Install may be unavailable.", "error");
       })
       .finally(() => {
-        if (!isStandaloneInstalled()) setInstallButton("Install App", false);
+        if (!isStandaloneInstalled() && !pendingSwUpdate) setInstallButton("Install App", false);
       });
   } else {
     setInstallButton("Install App", false);
@@ -2169,7 +2207,7 @@ function setupPwa() {
   window.addEventListener("beforeinstallprompt", (event) => {
     event.preventDefault();
     state.deferredPrompt = event;
-    setInstallButton("Install App", false);
+    if (!pendingSwUpdate) setInstallButton("Install App", false);
   });
   window.addEventListener("appinstalled", () => {
     state.deferredPrompt = null;
@@ -2177,6 +2215,7 @@ function setupPwa() {
     setStatus("App installed successfully.", "success");
   });
   el.installBtn.addEventListener("click", async () => {
+    if (activatePendingUpdate()) return;
     if (isStandaloneInstalled()) {
       setInstallButton("App Installed", true);
       setStatus("App is already installed.", "success");
@@ -2206,6 +2245,8 @@ function setupPwa() {
       state.deferredPrompt = null;
       if (isStandaloneInstalled()) {
         setInstallButton("App Installed", true);
+      } else if (pendingSwUpdate) {
+        setUpdateButton();
       } else {
         setInstallButton("Install App", false);
       }
