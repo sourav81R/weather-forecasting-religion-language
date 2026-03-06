@@ -45,6 +45,20 @@ CREATE TABLE IF NOT EXISTS alert_rules (
     UNIQUE(user_id, rule_type),
     FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS chat_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    session_id TEXT,
+    role TEXT NOT NULL,
+    message TEXT NOT NULL,
+    language TEXT,
+    timestamp TEXT NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_chat_history_user_timestamp ON chat_history (user_id, timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_chat_history_session_timestamp ON chat_history (session_id, timestamp DESC);
 """
 
 

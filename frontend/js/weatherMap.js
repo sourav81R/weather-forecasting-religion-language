@@ -489,6 +489,47 @@ class WeatherMapController {
     }
   }
 
+  applyChatAction(actionPayload = {}) {
+    if (!this.map || !actionPayload) return false;
+    const actionType = typeof actionPayload === "string" ? actionPayload : String(actionPayload.type || "").trim();
+    const location = typeof actionPayload === "object" ? actionPayload.location || null : null;
+    if (!actionType) return false;
+
+    if (location) {
+      this._focusLocationFromChat(location);
+    }
+
+    if (actionType === "show_wind_layer") {
+      this._setOverlayVisible("Wind Flow", true);
+      this._setOverlayVisible("Wind Speed", true);
+      this.scheduleRefresh(true);
+      return true;
+    }
+    if (actionType === "show_rain_layer") {
+      this._setOverlayVisible("Rain Radar", true);
+      this._setOverlayVisible("Precipitation", true);
+      this.scheduleRefresh(true);
+      return true;
+    }
+    if (actionType === "show_cloud_layer") {
+      this._setOverlayVisible("Cloud Coverage", true);
+      this.scheduleRefresh(true);
+      return true;
+    }
+    if (actionType === "show_temperature_layer") {
+      this._setOverlayVisible("Temperature", true);
+      this.scheduleRefresh(true);
+      return true;
+    }
+    if (actionType === "highlight_storm") {
+      this._setOverlayVisible("Storm Alerts", true);
+      this._setOverlayVisible("Rain Radar", true);
+      this.scheduleRefresh(true);
+      return true;
+    }
+    return false;
+  }
+
   setFocusLocation(location, options = {}) {
     if (!this.map || !location) return;
     const latitude = finiteNumber(location.latitude, NaN);
@@ -508,6 +549,29 @@ class WeatherMapController {
       this.map.setView([latitude, longitude], Math.max(this.map.getZoom(), 5));
       this.focusedOnce = true;
     }
+  }
+
+  _focusLocationFromChat(location) {
+    const latitude = finiteNumber(location.latitude, NaN);
+    const longitude = finiteNumber(location.longitude, NaN);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
+    this.setFocusLocation(
+      {
+        latitude,
+        longitude,
+        label: String(location.label || location.city || "Chat-selected location"),
+      },
+      { forcePan: true }
+    );
+  }
+
+  _setOverlayVisible(label, visible) {
+    const layer = this.overlayRegistry[label];
+    if (!layer || !this.map) return;
+    const shouldShow = Boolean(visible);
+    const isVisible = this.map.hasLayer(layer);
+    if (shouldShow && !isVisible) layer.addTo(this.map);
+    if (!shouldShow && isVisible) this.map.removeLayer(layer);
   }
 
   setHourOffset(value, options = {}) {

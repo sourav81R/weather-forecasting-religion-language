@@ -170,6 +170,7 @@ const el = {
   saveSettingsBtn: document.getElementById("saveSettingsBtn"),
   savedCitiesServer: document.getElementById("savedCitiesServer"),
   chatLog: document.getElementById("chatLog"),
+  chatPromptSuggestions: document.getElementById("chatPromptSuggestions"),
   chatInput: document.getElementById("chatInput"),
   chatSendBtn: document.getElementById("chatSendBtn"),
   tempChart: document.getElementById("tempChart"),
@@ -2686,6 +2687,50 @@ function rememberChatTurn(role, text) {
   }
 }
 
+function createTypingBubble() {
+  const bubble = document.createElement("div");
+  bubble.className = "chat-bubble chat-bot chat-typing";
+  bubble.innerHTML = "<span></span><span></span><span></span>";
+  el.chatLog.appendChild(bubble);
+  el.chatLog.scrollTop = el.chatLog.scrollHeight;
+  return bubble;
+}
+
+function removeTypingBubble(bubble) {
+  if (bubble?.parentNode) {
+    bubble.parentNode.removeChild(bubble);
+  }
+}
+
+async function loadChatHistory() {
+  if (state.staticMode || !el.chatLog) return false;
+  try {
+    const response = await apiRequest("/api/chatbot/history");
+    const messages = Array.isArray(response.messages) ? response.messages : [];
+    if (!messages.length) return false;
+
+    el.chatLog.innerHTML = "";
+    state.chatHistory = [];
+    for (const item of messages) {
+      const role = String(item.role || "").toLowerCase() === "user" ? "user" : "bot";
+      appendChat(String(item.text || ""), role);
+      rememberChatTurn(role === "user" ? "user" : "model", String(item.text || ""));
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function applyChatMapAction(actionPayload) {
+  if (!actionPayload || !state.weatherMapController) return false;
+  const applied = state.weatherMapController.applyChatAction(actionPayload);
+  if (applied) {
+    activateSection("maps");
+  }
+  return applied;
+}
+
 function chatHas(text, words) {
   return words.some((word) => text.includes(word));
 }
@@ -2792,8 +2837,10 @@ async function askChatbot() {
   if (!question) return;
   el.chatInput.value = "";
   appendChat(question, "user");
+  const typingBubble = createTypingBubble();
   if (state.staticMode) {
     const staticAnswer = answerStaticWeatherQuestion(question);
+    removeTypingBubble(typingBubble);
     appendChat(staticAnswer, "bot");
     rememberChatTurn("user", question);
     rememberChatTurn("model", staticAnswer);
@@ -2805,11 +2852,16 @@ async function askChatbot() {
       method: "POST",
       body: JSON.stringify({ ...currentPayload(), ...locationPayload(), question, history: state.chatHistory }),
     });
-    const answer = response.answer || "No answer available.";
+    removeTypingBubble(typingBubble);
+    const answer = response.reply || response.answer || "No answer available.";
     appendChat(answer, "bot");
     rememberChatTurn("user", question);
     rememberChatTurn("model", answer);
+    if (applyChatMapAction(response.map_action)) {
+      setStatus("Updated the weather map for your chat request.", "success");
+    }
   } catch (error) {
+    removeTypingBubble(typingBubble);
     appendChat(`Error: ${error.message}`, "bot");
   }
 }
@@ -3424,6 +3476,16 @@ function wireEvents() {
   el.chatInput.addEventListener("keydown", (event) => {
     if (event.key === "Enter") void askChatbot();
   });
+  if (el.chatPromptSuggestions) {
+    el.chatPromptSuggestions.addEventListener("click", (event) => {
+      const target = event.target.closest("[data-chat-prompt]");
+      if (!target) return;
+      const prompt = target.getAttribute("data-chat-prompt");
+      if (!prompt) return;
+      el.chatInput.value = prompt;
+      void askChatbot();
+    });
+  }
   el.signupBtn.addEventListener("click", () => void authSignup());
   el.loginBtn.addEventListener("click", () => void authLogin());
   el.logoutBtn.addEventListener("click", () => void authLogout());
@@ -3491,8 +3553,11 @@ async function initialize() {
   applyDarkMode();
 
   await loadAuthState();
+  const restoredChatHistory = await loadChatHistory();
   await useCurrentLocation();
-  appendChat("Ask about weather, forecasts, planning, or general questions.", "bot");
+  if (!restoredChatHistory) {
+    appendChat("Ask about weather, forecasts, planning, maps, farming, travel, or general questions.", "bot");
+  }
   window.addEventListener("beforeunload", () => {
     stopLiveCamera();
   });
