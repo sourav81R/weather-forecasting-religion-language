@@ -1,22 +1,186 @@
 from __future__ import annotations
 
 import datetime as dt
+import json
 import re
 from typing import Any
 
+import requests
+
+from backend.config import get_settings
 from backend.services.ai_service import generate_weather_summary
 
+GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+GEMINI_SYSTEM_INSTRUCTION = (
+    "You are the Regional Weather Studio chatbot. Answer any user question helpfully and directly. "
+    "Use the provided weather context whenever the question is weather-related, and clearly separate facts from guesses. "
+    "If the question is not about weather, still answer normally as a general assistant. "
+    "Do not claim to have live browsing or tools beyond the provided weather context. "
+    "Keep answers concise, practical, and safe."
+)
+CHAT_HISTORY_LIMIT = 12
 
-def chatbot_response(question: str, current_weather: dict[str, Any], forecast: dict[str, Any], activity_payload: dict[str, Any]) -> str:
+
+def chatbot_response(
+    question: str,
+    current_weather: dict[str, Any],
+    forecast: dict[str, Any],
+    activity_payload: dict[str, Any],
+    history: list[dict[str, Any]] | None = None,
+) -> str:
+    text = question.strip()
+    if not text:
+        return (
+            "Ask anything. I can answer general questions and use your current weather data for rain, temperature, UV, wind, "
+            "sunrise/sunset, weekend forecast, and outdoor planning."
+        )
+
+    fallback = _fallback_chatbot_response(text, current_weather, forecast, activity_payload)
+    try:
+        gemini_answer = _gemini_chatbot_response(text, current_weather, forecast, activity_payload, history or [])
+        if gemini_answer:
+            return gemini_answer
+    except Exception:
+        pass
+    return fallback
+
+
+def _gemini_chatbot_response(
+    question: str,
+    current_weather: dict[str, Any],
+    forecast: dict[str, Any],
+    activity_payload: dict[str, Any],
+    history: list[dict[str, Any]],
+) -> str:
+    settings = get_settings()
+    if not settings.gemini_api_key:
+        raise ValueError("Gemini API key is not configured.")
+
+    weather_context = _build_weather_context(current_weather, forecast, activity_payload)
+    contents = _build_gemini_contents(question, weather_context, history)
+    response = requests.post(
+        GEMINI_API_URL.format(model=settings.gemini_model),
+        headers={"x-goog-api-key": settings.gemini_api_key, "Content-Type": "application/json"},
+        json={
+            "system_instruction": {
+                "parts": [{"text": GEMINI_SYSTEM_INSTRUCTION}],
+            },
+            "contents": contents,
+            "generationConfig": {
+                "temperature": 0.7,
+                "topP": 0.9,
+                "maxOutputTokens": 700,
+            },
+        },
+        timeout=settings.gemini_timeout_seconds,
+    )
+    response.raise_for_status()
+    payload = response.json()
+    answer = _extract_gemini_text(payload)
+    if not answer:
+        raise ValueError("Gemini returned an empty response.")
+    return answer
+
+
+def _build_gemini_contents(question: str, weather_context: str, history: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    contents: list[dict[str, Any]] = []
+    for item in history[-CHAT_HISTORY_LIMIT:]:
+        role = "model" if str(item.get("role", "")).lower() in {"assistant", "model", "bot"} else "user"
+        text = str(item.get("text", "")).strip()
+        if not text:
+            continue
+        contents.append({"role": role, "parts": [{"text": text}]})
+
+    contents.append(
+        {
+            "role": "user",
+            "parts": [
+                {
+                    "text": (
+                        "Weather context for this conversation:\n"
+                        f"{weather_context}\n\n"
+                        f"User question: {question}"
+                    )
+                }
+            ],
+        }
+    )
+    return contents
+
+
+def _extract_gemini_text(payload: dict[str, Any]) -> str:
+    candidates = payload.get("candidates") or []
+    for candidate in candidates:
+        content = candidate.get("content") or {}
+        parts = content.get("parts") or []
+        chunks = [str(part.get("text", "")).strip() for part in parts if str(part.get("text", "")).strip()]
+        if chunks:
+            return "\n".join(chunks).strip()
+    return ""
+
+
+def _build_weather_context(current_weather: dict[str, Any], forecast: dict[str, Any], activity_payload: dict[str, Any]) -> str:
+    daily = forecast.get("daily") or []
+    hourly = forecast.get("hourly") or []
+    best_activity = activity_payload.get("bestActivity") or {}
+
+    compact_daily = [
+        {
+            "date": day.get("date"),
+            "condition": day.get("condition"),
+            "minTemp": day.get("minTemp"),
+            "maxTemp": day.get("maxTemp"),
+            "rainProbability": day.get("rainProbability"),
+            "uvIndex": day.get("uvIndex"),
+            "windSpeed": day.get("windSpeed"),
+        }
+        for day in daily[:5]
+    ]
+    compact_hourly = [
+        {
+            "time": hour.get("time"),
+            "temperature": hour.get("temperature"),
+            "rainProbability": hour.get("rainProbability"),
+            "windSpeed": hour.get("windSpeed"),
+            "humidity": hour.get("humidity"),
+            "uvIndex": hour.get("uvIndex"),
+        }
+        for hour in hourly[:12]
+    ]
+
+    context = {
+        "location": current_weather.get("location"),
+        "current": {
+            "condition": current_weather.get("condition"),
+            "temperature": current_weather.get("temperature"),
+            "temperatureUnit": current_weather.get("temperatureUnit"),
+            "feelsLike": current_weather.get("feelsLike"),
+            "humidity": current_weather.get("humidity"),
+            "windSpeed": current_weather.get("windSpeed"),
+            "windUnit": current_weather.get("windUnit"),
+            "sunrise": current_weather.get("sunrise"),
+            "sunset": current_weather.get("sunset"),
+        },
+        "forecastDailyTop5": compact_daily,
+        "forecastHourlyTop12": compact_hourly,
+        "bestActivity": {
+            "activity": best_activity.get("activity"),
+            "score": best_activity.get("score"),
+            "recommendation": best_activity.get("recommendation"),
+        },
+    }
+    return json.dumps(context, ensure_ascii=True, indent=2)
+
+
+def _fallback_chatbot_response(
+    question: str,
+    current_weather: dict[str, Any],
+    forecast: dict[str, Any],
+    activity_payload: dict[str, Any],
+) -> str:
     text = question.strip().lower()
     daily = forecast.get("daily") or []
     hourly = forecast.get("hourly") or []
-
-    if not text:
-        return (
-            "Ask any weather question, for example: rain today/tomorrow, hottest day, UV, wind, humidity, "
-            "sunrise/sunset, weekend forecast, or best outdoor time."
-        )
 
     if not daily:
         return "Forecast data is not loaded yet. Try again after weather data refresh."
@@ -120,7 +284,7 @@ def chatbot_response(question: str, current_weather: dict[str, Any], forecast: d
     }
     return (
         generate_weather_summary(summary_payload)
-        + " Ask about rain, temperature, UV, sunrise/sunset, weekend, or best outdoor time for deeper details."
+        + " Ask anything else, or ask about rain, temperature, UV, sunrise/sunset, weekend, or best outdoor time."
     )
 
 

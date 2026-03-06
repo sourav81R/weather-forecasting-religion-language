@@ -8,6 +8,7 @@ const WEATHER_HISTORY_READ_LIMIT = 144;
 const OFFLINE_MODE_BANNER_TEXT = "Offline Mode – Showing predicted forecast based on cached data";
 const LIVE_SCAN_INTERVAL_MS = 5000;
 const LIVE_SCAN_CACHE_TTL_MS = 60 * 1000;
+const CHAT_HISTORY_LIMIT = 12;
 const LUNAR_CYCLE_DAYS = 29.53058867;
 const REFERENCE_NEW_MOON_UTC_MS = Date.UTC(2000, 0, 6, 18, 14, 0);
 const QUICK_CITIES = ["Kolkata", "Delhi", "Mumbai", "Chennai", "Dhaka", "Bengaluru"];
@@ -199,6 +200,7 @@ const state = {
   offlineMode: false,
   offlineForecast: null,
   offlineForecastEngine: null,
+  chatHistory: [],
   liveCamera: {
     controller: null,
     facingMode: "environment",
@@ -2674,6 +2676,16 @@ function appendChat(text, role) {
   el.chatLog.scrollTop = el.chatLog.scrollHeight;
 }
 
+function rememberChatTurn(role, text) {
+  const normalizedRole = role === "user" ? "user" : "model";
+  const message = String(text || "").trim();
+  if (!message) return;
+  state.chatHistory.push({ role: normalizedRole, text: message });
+  if (state.chatHistory.length > CHAT_HISTORY_LIMIT) {
+    state.chatHistory = state.chatHistory.slice(-CHAT_HISTORY_LIMIT);
+  }
+}
+
 function chatHas(text, words) {
   return words.some((word) => text.includes(word));
 }
@@ -2781,16 +2793,22 @@ async function askChatbot() {
   el.chatInput.value = "";
   appendChat(question, "user");
   if (state.staticMode) {
-    appendChat(answerStaticWeatherQuestion(question), "bot");
+    const staticAnswer = answerStaticWeatherQuestion(question);
+    appendChat(staticAnswer, "bot");
+    rememberChatTurn("user", question);
+    rememberChatTurn("model", staticAnswer);
     return;
   }
 
   try {
     const response = await apiRequest("/api/chatbot", {
       method: "POST",
-      body: JSON.stringify({ ...currentPayload(), ...locationPayload(), question }),
+      body: JSON.stringify({ ...currentPayload(), ...locationPayload(), question, history: state.chatHistory }),
     });
-    appendChat(response.answer || "No answer available.", "bot");
+    const answer = response.answer || "No answer available.";
+    appendChat(answer, "bot");
+    rememberChatTurn("user", question);
+    rememberChatTurn("model", answer);
   } catch (error) {
     appendChat(`Error: ${error.message}`, "bot");
   }
@@ -3474,7 +3492,7 @@ async function initialize() {
 
   await loadAuthState();
   await useCurrentLocation();
-  appendChat("Ask me about rain, weekend temperature, or outdoor plans.", "bot");
+  appendChat("Ask about weather, forecasts, planning, or general questions.", "bot");
   window.addEventListener("beforeunload", () => {
     stopLiveCamera();
   });
