@@ -14,7 +14,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="/css/app.css?v=20260306-25">
+  <link rel="stylesheet" href="/css/app.css?v=20260307-27">
 </head>
 <body>
   <div class="app-shell" id="appShell">
@@ -343,13 +343,75 @@
           <button id="chatSendBtn" class="primary-btn" type="button">Ask</button>
         </div>
       </section>
+
+      <footer class="platform-footer panel" id="platformFooter" aria-labelledby="footerTitle">
+        <div class="footer-hero">
+          <div class="footer-brand-block">
+            <p class="footer-kicker">Regional Weather Studio</p>
+            <h2 id="footerTitle">Forecasting, intelligence, and planning in one workspace.</h2>
+            <p class="footer-copy">
+              The live app combines Flask APIs, browser fallback mode, ML prediction, map intelligence,
+              sky analysis, alerts, and planners inside a single weather operations dashboard.
+            </p>
+          </div>
+          <div class="footer-meta-grid" aria-label="Platform summary">
+            <article class="footer-meta">
+              <span>Runtime</span>
+              <strong id="footerRuntimeMode">Detecting backend</strong>
+            </article>
+            <article class="footer-meta">
+              <span>Delivery</span>
+              <strong>PWA + offline fallback</strong>
+            </article>
+            <article class="footer-meta">
+              <span>Coverage</span>
+              <strong>Forecast, maps, alerts, AI</strong>
+            </article>
+            <article class="footer-meta">
+              <span>Stack</span>
+              <strong>Flask, SQLite, Chart.js, Leaflet</strong>
+            </article>
+          </div>
+        </div>
+
+        <div class="footer-links-row">
+          <div class="footer-link-group">
+            <p class="footer-group-title">Jump To</p>
+            <div class="footer-link-list">
+              <button class="footer-link-btn" type="button" data-footer-section="dashboard">Overview</button>
+              <button class="footer-link-btn" type="button" data-footer-section="forecast">Forecast</button>
+              <button class="footer-link-btn" type="button" data-footer-section="analytics">Analytics</button>
+              <button class="footer-link-btn" type="button" data-footer-section="planner">Planner</button>
+              <button class="footer-link-btn" type="button" data-footer-section="alerts">Alerts</button>
+              <button class="footer-link-btn" type="button" data-footer-section="maps">Maps</button>
+              <button class="footer-link-btn" type="button" data-footer-section="settings">Settings</button>
+            </div>
+          </div>
+
+          <div class="footer-link-group">
+            <p class="footer-group-title">Core Systems</p>
+            <div class="footer-pill-list" aria-label="Core platform systems">
+              <span class="footer-pill">Weather APIs</span>
+              <span class="footer-pill">ML models</span>
+              <span class="footer-pill">Vision analysis</span>
+              <span class="footer-pill">Hyperlocal fusion</span>
+              <span class="footer-pill">Travel and agriculture tools</span>
+              <span class="footer-pill">Auth and saved cities</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="footer-bottom">
+          <p class="footer-note">&copy; <span id="footerYear"></span> Regional Weather Studio</p>
+        </div>
+      </footer>
     </main>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet-velocity/dist/leaflet-velocity.min.js"></script>
-  <script src="/js/app.js?v=20260306-26"></script>
+  <script src="/js/app.js?v=20260307-27"></script>
 </body>
 </html>
 
