@@ -101,6 +101,7 @@ const el = {
   sidebar: document.querySelector(".sidebar"),
   nav: document.getElementById("sidebarNav"),
   sidebarToggle: document.getElementById("sidebarToggle"),
+  platformFooter: document.getElementById("platformFooter"),
   cityInput: document.getElementById("cityInput"),
   fetchBtn: document.getElementById("fetchBtn"),
   locateBtn: document.getElementById("locateBtn"),
@@ -169,6 +170,8 @@ const el = {
   darkModeToggle: document.getElementById("darkModeToggle"),
   saveSettingsBtn: document.getElementById("saveSettingsBtn"),
   savedCitiesServer: document.getElementById("savedCitiesServer"),
+  footerRuntimeMode: document.getElementById("footerRuntimeMode"),
+  footerYear: document.getElementById("footerYear"),
   chatLog: document.getElementById("chatLog"),
   chatPromptSuggestions: document.getElementById("chatPromptSuggestions"),
   chatInput: document.getElementById("chatInput"),
@@ -2921,6 +2924,27 @@ function closeSidebarNav() {
   if (el.sidebarToggle) el.sidebarToggle.setAttribute("aria-expanded", "false");
 }
 
+function updateFooterSummary() {
+  if (el.footerRuntimeMode) {
+    el.footerRuntimeMode.textContent = state.staticMode ? "Static mode fallback" : "Backend mode connected";
+  }
+  if (el.footerYear) {
+    el.footerYear.textContent = String(new Date().getFullYear());
+  }
+}
+
+function scrollSectionIntoView(sectionId) {
+  const sectionElement = document.getElementById(String(sectionId || "").trim());
+  if (!sectionElement) return;
+  requestAnimationFrame(() => {
+    try {
+      sectionElement.scrollIntoView({ behavior: "smooth", block: "start" });
+    } catch {
+      sectionElement.scrollIntoView();
+    }
+  });
+}
+
 function toggleSidebarNav() {
   if (!el.appShell || !el.sidebarToggle || !isMobileNavViewport()) return;
   const willOpen = !el.appShell.classList.contains("sidebar-open");
@@ -3243,6 +3267,7 @@ async function fetchConfig() {
   el.languageSelect.innerHTML = languages.map((lang) => `<option value="${lang}">${lang}</option>`).join("");
   el.languageSelect.value = state.config.defaultLanguage || "English";
   el.unitsSelect.value = state.config.defaultUnits || "metric";
+  updateFooterSummary();
 }
 
 function setupPwa() {
@@ -3504,6 +3529,15 @@ function wireEvents() {
     void applySelectedLanguage();
     if (state.current) void loadPlatformBundle(locationPayload());
   });
+  if (el.platformFooter) {
+    el.platformFooter.addEventListener("click", (event) => {
+      const target = event.target.closest("[data-footer-section]");
+      if (!target) return;
+      const section = target.getAttribute("data-footer-section");
+      activateSection(section);
+      scrollSectionIntoView(section);
+    });
+  }
   el.apiKeyInput.addEventListener("change", () => {
     if (state.weatherMapController) {
       void state.weatherMapController.updateContext({ forceTileReload: true, apiBase: state.apiBase, staticMode: state.staticMode });
@@ -3533,6 +3567,7 @@ async function initialize() {
     return;
   }
 
+  updateFooterSummary();
   setupSectionNavigation();
   setupResponsiveSidebar();
   ensureSeparateLiveScannerCard();
