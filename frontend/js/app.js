@@ -540,7 +540,32 @@ function liveCameraToggleLabel(value) {
   return normalizeLiveCameraFacingMode(value) === "user" ? "Use Rear Camera" : "Use Front Camera";
 }
 
+function ensureLiveCameraFlipButton() {
+  const controls = document.querySelector(".live-camera-block .camera-controls");
+  if (!controls) return null;
+
+  let button = document.getElementById("liveCameraFlipBtn");
+  if (!button) {
+    button = document.createElement("button");
+    button.id = "liveCameraFlipBtn";
+    button.className = "ghost-btn camera-flip-btn";
+    button.type = "button";
+    button.textContent = "Use Front Camera";
+
+    const scanButton = document.getElementById("liveCameraScanBtn");
+    if (scanButton && scanButton.parentElement === controls) {
+      scanButton.insertAdjacentElement("afterend", button);
+    } else {
+      controls.appendChild(button);
+    }
+  }
+
+  el.liveCameraFlipBtn = button;
+  return button;
+}
+
 function applyLiveCameraFacingUi() {
+  ensureLiveCameraFlipButton();
   const facingMode = normalizeLiveCameraFacingMode(state.liveCamera.facingMode);
   state.liveCamera.facingMode = facingMode;
 
@@ -2453,6 +2478,7 @@ async function ensureLiveCameraController() {
 }
 
 function initializeLiveCameraUi() {
+  ensureLiveCameraFlipButton();
   if (!el.liveCameraStartBtn || !el.liveCameraVideo || !el.liveCameraCanvas) return;
   applyLiveCameraFacingUi();
   const supported = Boolean(navigator?.mediaDevices?.getUserMedia);
@@ -3460,6 +3486,7 @@ function setupSavedServerCities() {
 }
 
 function wireEvents() {
+  ensureLiveCameraFlipButton();
   el.fetchBtn.addEventListener("click", () => {
     const city = el.cityInput.value.trim();
     if (!city) {
