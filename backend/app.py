@@ -10,6 +10,7 @@ from backend.models.db import init_db
 from backend.models.user import get_user_by_id
 from backend.routes.auth_routes import bp as auth_bp
 from backend.routes.hyperlocal_routes import bp as hyperlocal_bp
+from backend.routes.hourly_routes import bp as hourly_bp
 from backend.routes.intelligence_routes import bp as intelligence_bp
 from backend.routes.ml_routes import bp as ml_bp
 from backend.routes.vision_routes import bp as vision_bp
@@ -42,6 +43,7 @@ def create_app() -> Flask:
     app.register_blueprint(ml_bp)
     app.register_blueprint(vision_bp)
     app.register_blueprint(hyperlocal_bp)
+    app.register_blueprint(hourly_bp)
 
     @app.after_request
     def add_cors_headers(response):

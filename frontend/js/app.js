@@ -200,6 +200,7 @@ const state = {
   user: { authenticated: false },
   localFavorites: loadLocalFavorites(),
   weatherMapController: null,
+  hourlyForecastController: null,
   deferredPrompt: null,
   offlineMode: false,
   offlineForecast: null,
@@ -226,6 +227,7 @@ let weatherHistoryDbPromise = null;
 let offlineForecastModulePromise = null;
 let liveCameraModulePromise = null;
 let weatherMapModulePromise = null;
+let hourlyForecastModulePromise = null;
 
 // Edge-computing cache: keep forecast history on-device so offline predictions run in-browser.
 function idbTransactionDone(transaction) {
@@ -453,6 +455,16 @@ async function getWeatherMapModule() {
   return weatherMapModulePromise;
 }
 
+async function getHourlyForecastModule() {
+  if (!hourlyForecastModulePromise) {
+    hourlyForecastModulePromise = importModuleCandidates([
+      "/components/hourlyForecast.js?v=20260309-30",
+      "/frontend/components/hourlyForecast.js?v=20260309-30",
+    ]);
+  }
+  return hourlyForecastModulePromise;
+}
+
 async function initializeWeatherMapController() {
   if (state.weatherMapController) {
     await state.weatherMapController.updateContext({
@@ -499,6 +511,21 @@ async function initializeWeatherMapController() {
     await state.weatherMapController.init();
   } catch (error) {
     setStatus(`Map module unavailable: ${error.message}`, "error");
+  }
+}
+
+async function initializeHourlyForecastController() {
+  if (state.hourlyForecastController) return;
+  try {
+    const module = await getHourlyForecastModule();
+    state.hourlyForecastController = module.createHourlyForecastController({
+      statusId: "hourlyForecastStatus",
+      timelineId: "hourlyForecastTimeline",
+      chartId: "hourlyForecastChart",
+      metaId: "hourlyForecastMeta",
+    });
+  } catch (error) {
+    setStatus(`Hourly forecast module unavailable: ${error.message}`, "error");
   }
 }
 
@@ -1644,6 +1671,20 @@ function applyBundle(bundle, options = {}) {
   renderAlerts(state.alerts);
   renderAiSummary(bundle.aiSummary);
   addFavorite((state.current.location || "").split(",")[0]);
+  if (state.hourlyForecastController) {
+    const latitude = Number(bundle?.current?.latitude);
+    const longitude = Number(bundle?.current?.longitude);
+    if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+      void state.hourlyForecastController.load({
+        latitude,
+        longitude,
+        units: el.unitsSelect.value,
+        apiBase: state.apiBase,
+      });
+    } else {
+      state.hourlyForecastController.clear();
+    }
+  }
   if (state.weatherMapController) {
     void state.weatherMapController.updateContext({ apiBase: state.apiBase, staticMode: state.staticMode });
     state.weatherMapController.setFocusLocation({
@@ -3606,6 +3647,7 @@ async function initialize() {
   setupConnectivityWatchers();
   wireEvents();
   await initializeWeatherMapController();
+  await initializeHourlyForecastController();
   initializeLiveCameraUi();
   await applySelectedLanguage();
   await cleanupExpiredWeatherHistory();
