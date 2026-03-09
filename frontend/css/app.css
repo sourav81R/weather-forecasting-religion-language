@@ -733,6 +733,146 @@ select:focus,
   border-color: color-mix(in srgb, #14b79e 32%, var(--line));
 }
 
+.hourly-forecast-card {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 14px;
+  border-color: color-mix(in srgb, var(--brand) 24%, var(--line));
+  background:
+    radial-gradient(circle at 100% 0%, rgba(31, 111, 255, 0.16), transparent 40%),
+    radial-gradient(circle at 0% 100%, rgba(0, 184, 164, 0.12), transparent 42%),
+    linear-gradient(160deg, var(--panel), rgba(255, 255, 255, 0.58));
+}
+
+.hourly-forecast-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.hourly-forecast-head h2 {
+  margin-bottom: 4px;
+}
+
+.hourly-forecast-meta {
+  margin: 0;
+  align-self: center;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text);
+  border: 1px solid color-mix(in srgb, var(--brand) 22%, var(--line));
+  border-radius: 999px;
+  padding: 7px 12px;
+  background: color-mix(in srgb, var(--panel-solid) 90%, transparent);
+}
+
+.hourly-forecast-timeline {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(110px, 1fr);
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+  scrollbar-width: thin;
+}
+
+.hourly-forecast-timeline::-webkit-scrollbar {
+  height: 8px;
+}
+
+.hourly-forecast-timeline::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--brand) 28%, var(--line));
+  border-radius: 999px;
+}
+
+.hourly-forecast-empty {
+  min-height: 118px;
+  display: grid;
+  place-items: center;
+  border: 1px dashed color-mix(in srgb, var(--brand) 24%, var(--line));
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--panel-solid) 90%, transparent);
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.hourly-forecast-item {
+  min-width: 0;
+  border: 1px solid color-mix(in srgb, var(--brand) 18%, var(--line));
+  border-radius: 16px;
+  padding: 12px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.48), transparent 40%),
+    color-mix(in srgb, var(--panel-solid) 94%, transparent);
+  box-shadow: 0 10px 24px rgba(12, 43, 80, 0.08);
+  display: grid;
+  gap: 9px;
+}
+
+.hourly-forecast-time {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.hourly-forecast-icon {
+  font-size: 29px;
+  line-height: 1;
+}
+
+.hourly-forecast-temp {
+  font-size: 26px;
+  font-weight: 900;
+  letter-spacing: -0.5px;
+  color: var(--text);
+}
+
+.hourly-forecast-rain,
+.hourly-forecast-wind {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.hourly-forecast-rain span:first-child,
+.hourly-forecast-wind span:first-child {
+  color: var(--muted);
+}
+
+.hourly-rain-bar {
+  height: 7px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--line) 82%, transparent);
+}
+
+.hourly-rain-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #2492ff, #11c0c9);
+}
+
+.hourly-chart-shell {
+  min-height: 220px;
+  border: 1px solid color-mix(in srgb, var(--brand) 20%, var(--line));
+  border-radius: 16px;
+  padding: 10px;
+  background: color-mix(in srgb, var(--panel-solid) 92%, transparent);
+}
+
+.hourly-chart-shell canvas {
+  display: block;
+  width: 100% !important;
+  height: 200px !important;
+  max-height: 200px;
+}
+
 .activity-item {
   display: grid;
   gap: 8px;
@@ -1753,6 +1893,10 @@ select:focus,
     grid-template-columns: 1fr 1fr;
   }
 
+  .hourly-forecast-head {
+    flex-direction: column;
+  }
+
   .weather-map-controls input[type="range"] {
     grid-column: 1 / -1;
   }
@@ -1823,6 +1967,19 @@ select:focus,
     min-height: 340px;
   }
 
+  .hourly-forecast-timeline {
+    grid-auto-columns: minmax(102px, 102px);
+  }
+
+  .hourly-chart-shell {
+    min-height: 190px;
+  }
+
+  .hourly-chart-shell canvas {
+    height: 170px !important;
+    max-height: 170px;
+  }
+
   .nav {
     grid-template-columns: 1fr;
   }
@@ -1868,6 +2025,19 @@ select:focus,
     flex-direction: column;
     align-items: flex-start;
     gap: 6px;
+  }
+
+  .hourly-forecast-item {
+    padding: 10px;
+  }
+
+  .hourly-forecast-temp {
+    font-size: 22px;
+  }
+
+  .hourly-chart-shell canvas {
+    height: 150px !important;
+    max-height: 150px;
   }
 
   .sidebar-toggle {
