@@ -458,8 +458,8 @@ async function getWeatherMapModule() {
 async function getHourlyForecastModule() {
   if (!hourlyForecastModulePromise) {
     hourlyForecastModulePromise = importModuleCandidates([
-      "/components/hourlyForecast.js",
-      "/frontend/components/hourlyForecast.js",
+      "/components/hourlyForecast.js?v=20260309-30",
+      "/frontend/components/hourlyForecast.js?v=20260309-30",
     ]);
   }
   return hourlyForecastModulePromise;

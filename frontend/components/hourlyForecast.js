@@ -31,6 +31,37 @@ const WMO_ICONS = {
   99: "\u26C8",
 };
 
+const WMO_LABELS = {
+  0: "Clear",
+  1: "Mostly clear",
+  2: "Partly cloudy",
+  3: "Cloudy",
+  45: "Fog",
+  48: "Fog",
+  51: "Light drizzle",
+  53: "Drizzle",
+  55: "Heavy drizzle",
+  56: "Freezing drizzle",
+  57: "Freezing drizzle",
+  61: "Light rain",
+  63: "Rain",
+  65: "Heavy rain",
+  66: "Freezing rain",
+  67: "Freezing rain",
+  71: "Light snow",
+  73: "Snow",
+  75: "Heavy snow",
+  77: "Snow grains",
+  80: "Rain showers",
+  81: "Heavy showers",
+  82: "Storm showers",
+  85: "Snow showers",
+  86: "Heavy snow showers",
+  95: "Thunderstorm",
+  96: "Thunderstorm",
+  99: "Severe storm",
+};
+
 function safeNumber(value) {
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
@@ -90,6 +121,7 @@ function toDisplayHour(item, units) {
     rainProbability: rainProbability === null ? 0 : Math.max(0, Math.min(100, Math.round(rainProbability))),
     windLabel: windValue === null ? "--" : `${Math.round(windValue)} ${units === "imperial" ? "mph" : "km/h"}`,
     weatherCode,
+    conditionLabel: WMO_LABELS[weatherCode] || "Forecast",
     icon: WMO_ICONS[weatherCode] || "\uD83C\uDF24",
   };
 }
@@ -213,15 +245,35 @@ export function createHourlyForecastController(options = {}) {
 
     if (timelineNode) {
       timelineNode.innerHTML = displayHours
-        .map((item) => {
+        .map((item, index) => {
           const rainWidth = Math.max(0, Math.min(100, item.rainProbability));
-          return `<article class="hourly-forecast-item">
-            <p class="hourly-forecast-time">${item.hour}</p>
-            <div class="hourly-forecast-icon" aria-hidden="true">${item.icon}</div>
-            <p class="hourly-forecast-temp">${item.temperatureLabel}</p>
+          const cardClasses = [
+            "hourly-forecast-item",
+            index === 0 ? "is-current" : "",
+            item.rainProbability >= 40 ? "is-wet" : "",
+          ]
+            .filter(Boolean)
+            .join(" ");
+          return `<article class="${cardClasses}">
+            <div class="hourly-forecast-top">
+              <p class="hourly-forecast-time">${item.hour}</p>
+              <div class="hourly-forecast-tags">
+                ${index === 0 ? '<span class="hourly-forecast-tag is-now">Now</span>' : ""}
+                <span class="hourly-forecast-tag">WMO ${item.weatherCode}</span>
+              </div>
+            </div>
+            <div class="hourly-forecast-hero">
+              <div class="hourly-forecast-icon-wrap">
+                <div class="hourly-forecast-icon" aria-hidden="true">${item.icon}</div>
+              </div>
+              <div class="hourly-forecast-reading">
+                <p class="hourly-forecast-temp">${item.temperatureLabel}</p>
+                <p class="hourly-forecast-condition">${item.conditionLabel}</p>
+              </div>
+            </div>
             <div class="hourly-rain-bar" aria-hidden="true"><span style="width:${rainWidth}%"></span></div>
-            <div class="hourly-forecast-rain"><span>Rain</span><strong>${item.rainProbability}%</strong></div>
-            <div class="hourly-forecast-wind"><span>Wind</span><strong>${item.windLabel}</strong></div>
+            <div class="hourly-forecast-rain"><span>Rain chance</span><strong>${item.rainProbability}%</strong></div>
+            <div class="hourly-forecast-wind"><span>Wind speed</span><strong>${item.windLabel}</strong></div>
           </article>`;
         })
         .join("");
