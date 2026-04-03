@@ -8,6 +8,9 @@ const OPENWEATHER_ENDPOINT = "https://api.openweathermap.org/data/2.5/weather";
 const OPENMETEO_ENDPOINT = "https://api.open-meteo.com/v1/forecast";
 const OPENMETEO_GEO_ENDPOINT = "https://geocoding-api.open-meteo.com/v1/search";
 const OPENMETEO_REVERSE_GEO_ENDPOINT = "https://geocoding-api.open-meteo.com/v1/reverse";
+const NOMINATIM_SEARCH_ENDPOINT = "https://nominatim.openstreetmap.org/search";
+const NOMINATIM_REVERSE_ENDPOINT = "https://nominatim.openstreetmap.org/reverse";
+const PHOTON_SEARCH_ENDPOINT = "https://photon.komoot.io/api/";
 const BUILTIN_API_KEYS = ["d7842c0b970d897c608c64e6b6cc0b8a", "48a90ac42caa09f90dcaeee4096b9e53"];
 const DEFAULT_COORDS = { latitude: 22.5726, longitude: 88.3639 };
 const LANGUAGE_CODES = {
@@ -189,29 +192,416 @@ function candidateApiKeys(customKey) {
   return [...new Set(keys.filter(Boolean))];
 }
 
-async function staticGeocodeCity(city) {
-  const response = await fetch(`${OPENMETEO_GEO_ENDPOINT}?name=${encodeURIComponent(city)}&count=1&language=en&format=json`);
+function normalizePlaceText(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function placeTokens(value) {
+  return normalizePlaceText(value).split(/\s+/).filter(Boolean);
+}
+
+function primaryPlaceFragment(query) {
+  const parts = String(query || "").split(",").map((part) => part.trim()).filter(Boolean);
+  return parts[0] || String(query || "").trim();
+}
+
+function contextPlaceFragments(query) {
+  return String(query || "")
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .slice(1);
+}
+
+function textSimilarity(left, right) {
+  const a = normalizePlaceText(left).replace(/\s+/g, "");
+  const b = normalizePlaceText(right).replace(/\s+/g, "");
+  if (!a || !b) return 0;
+  const rows = a.length + 1;
+  const cols = b.length + 1;
+  const dp = Array.from({ length: rows }, (_, row) =>
+    Array.from({ length: cols }, (_, col) => (row === 0 ? col : col === 0 ? row : 0))
+  );
+  for (let row = 1; row < rows; row += 1) {
+    for (let col = 1; col < cols; col += 1) {
+      const cost = a[row - 1] === b[col - 1] ? 0 : 1;
+      dp[row][col] = Math.min(
+        dp[row - 1][col] + 1,
+        dp[row][col - 1] + 1,
+        dp[row - 1][col - 1] + cost
+      );
+    }
+  }
+  const distance = dp[rows - 1][cols - 1];
+  return 1 - distance / Math.max(a.length, b.length, 1);
+}
+
+function fragmentTokenOverlap(left, right) {
+  const leftTokens = new Set(placeTokens(left));
+  const rightTokens = new Set(placeTokens(right));
+  if (!leftTokens.size || !rightTokens.size) return 0;
+  let overlap = 0;
+  for (const token of leftTokens) {
+    if (rightTokens.has(token)) overlap += 1;
+  }
+  return overlap / Math.max(leftTokens.size, 1);
+}
+
+function parseCoordinateInput(value) {
+  const match = String(value || "").trim().match(/^(-?\d+(?:\.\d+)?)\s*[, ]\s*(-?\d+(?:\.\d+)?)$/);
+  if (!match) return null;
+  const latitude = Number(match[1]);
+  const longitude = Number(match[2]);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+  if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) return null;
+  return { latitude, longitude, label: `${latitude.toFixed(4)}, ${longitude.toFixed(4)}` };
+}
+
+function locationQueryVariants(query) {
+  const raw = String(query || "").trim();
+  const parts = raw.split(",").map((part) => part.trim()).filter(Boolean);
+  const variants = [raw];
+  if (parts.length) {
+    variants.push(parts.join(" "));
+    variants.push(parts[0]);
+  }
+  if (parts.length >= 2) {
+    variants.push(`${parts[0]} ${parts[parts.length - 1]}`);
+  }
+  return [...new Set(variants.map((value) => value.replace(/\s+/g, " ").trim()).filter(Boolean))];
+}
+
+function compactLocationLabel(...parts) {
+  const items = [];
+  const seen = new Set();
+  for (const raw of parts) {
+    const value = String(raw || "").trim();
+    if (!value) continue;
+    const key = value.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    items.push(value);
+  }
+  return items.join(", ");
+}
+
+function normalizeOpenMeteoLocationCandidate(result) {
+  const city = String(result?.name || "").trim();
+  if (!city) return null;
+  return {
+    city,
+    country: String(result?.country || result?.country_code || "").trim(),
+    latitude: Number(result?.latitude),
+    longitude: Number(result?.longitude),
+    label: compactLocationLabel(city, result?.admin2, result?.admin1, result?.country || result?.country_code),
+    importance: 0.55,
+    population: Number(result?.population || 0),
+    placeType: String(result?.feature_code || "").trim().toLowerCase(),
+    source: "open-meteo",
+  };
+}
+
+function normalizeNominatimLocationCandidate(result) {
+  const address = result?.address && typeof result.address === "object" ? result.address : {};
+  const city = String(
+    result?.name ||
+      address?.village ||
+      address?.town ||
+      address?.city ||
+      address?.municipality ||
+      address?.county ||
+      address?.state_district ||
+      address?.suburb ||
+      address?.hamlet ||
+      ""
+  ).trim();
+  const fallbackName = String(result?.display_name || "").split(",")[0].trim();
+  const resolvedCity = city || fallbackName;
+  if (!resolvedCity) return null;
+  return {
+    city: resolvedCity,
+    country: String(address?.country || "").trim(),
+    latitude: Number(result?.lat),
+    longitude: Number(result?.lon),
+    label: compactLocationLabel(
+      resolvedCity,
+      address?.county || address?.state_district || address?.district,
+      address?.state,
+      address?.country
+    ),
+    importance: Number(result?.importance || 0),
+    population: 0,
+    placeType: String(result?.type || "").trim().toLowerCase(),
+    category: String(result?.category || "").trim().toLowerCase(),
+    source: "nominatim",
+  };
+}
+
+function normalizePhotonLocationCandidate(result) {
+  const properties = result?.properties && typeof result.properties === "object" ? result.properties : {};
+  const coordinates = Array.isArray(result?.geometry?.coordinates) ? result.geometry.coordinates : [];
+  if (coordinates.length < 2) return null;
+  const city = String(properties?.name || properties?.city || properties?.county || "").trim();
+  if (!city) return null;
+  return {
+    city,
+    country: String(properties?.country || properties?.countrycode || "").trim(),
+    latitude: Number(coordinates[1]),
+    longitude: Number(coordinates[0]),
+    label: compactLocationLabel(city, properties?.county || properties?.district || properties?.city, properties?.state, properties?.country || properties?.countrycode),
+    importance: 0.35,
+    population: 0,
+    placeType: String(properties?.osm_value || properties?.type || "").trim().toLowerCase(),
+    category: String(properties?.osm_key || properties?.type || "").trim().toLowerCase(),
+    source: "photon",
+  };
+}
+
+function dedupeLocationCandidates(candidates) {
+  const unique = [];
+  const seen = new Set();
+  for (const candidate of candidates) {
+    const latitude = Number(candidate?.latitude);
+    const longitude = Number(candidate?.longitude);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) continue;
+    const city = String(candidate?.city || "").trim().toLowerCase();
+    const key = `${latitude.toFixed(4)}:${longitude.toFixed(4)}:${city}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(candidate);
+  }
+  return unique;
+}
+
+function scoreLocationCandidate(query, candidate) {
+  const queryText = normalizePlaceText(query);
+  const primaryQuery = primaryPlaceFragment(query);
+  const contextFragments = contextPlaceFragments(query);
+  const nameText = normalizePlaceText(candidate?.city);
+  const labelText = normalizePlaceText(candidate?.label);
+  const queryTokenSet = new Set(placeTokens(query));
+  const candidateTokenSet = new Set([...placeTokens(candidate?.city), ...placeTokens(candidate?.label)]);
+  let score = 0;
+
+  if (queryText && queryText === nameText) score += 120;
+  if (queryText && queryText === labelText) score += 90;
+  if (queryText && labelText.includes(queryText)) score += 40;
+  if (queryTokenSet.size) {
+    let matches = 0;
+    for (const token of queryTokenSet) {
+      if (candidateTokenSet.has(token)) matches += 1;
+    }
+    score += matches * 16;
+    if ([...queryTokenSet].every((token) => candidateTokenSet.has(token))) score += 24;
+  }
+  const primarySimilarity = Math.max(textSimilarity(primaryQuery, candidate?.city), textSimilarity(primaryQuery, candidate?.label));
+  score += primarySimilarity * 55;
+  if (normalizePlaceText(primaryQuery).length >= 5 && primarySimilarity < 0.34) score -= 34;
+  if (contextFragments.length) {
+    let contextScore = 0;
+    let matchedFragments = 0;
+    for (const fragment of contextFragments) {
+      const fragmentSimilarity = Math.max(textSimilarity(fragment, candidate?.label), fragmentTokenOverlap(fragment, candidate?.label));
+      if (fragmentSimilarity >= 0.6) {
+        matchedFragments += 1;
+        contextScore += fragmentSimilarity * 28;
+      } else if (fragmentSimilarity >= 0.34) {
+        contextScore += fragmentSimilarity * 10;
+      } else {
+        contextScore -= 26;
+      }
+    }
+    score += contextScore;
+    if (!matchedFragments) score -= 70;
+  }
+
+  score += Math.min(Number(candidate?.importance || 0) * 20, 12);
+  score += Math.min(Number(candidate?.population || 0) / 250000, 8);
+  if (["village", "hamlet", "town", "municipality", "suburb"].includes(String(candidate?.placeType || ""))) score += 4;
+  if (candidate?.source === "open-meteo") score += 2;
+  if (["railway", "amenity", "shop", "tourism", "building", "highway"].includes(String(candidate?.category || ""))) score -= 8;
+  return score;
+}
+
+function pickBestLocationCandidate(query, candidates) {
+  const unique = dedupeLocationCandidates(candidates);
+  if (!unique.length) return null;
+  return [...unique]
+    .sort((a, b) => scoreLocationCandidate(query, b) - scoreLocationCandidate(query, a))
+    .find((candidate) => isAcceptableLocationCandidate(query, candidate)) || null;
+}
+
+function pickApproximateLocationCandidate(query, candidates) {
+  const unique = dedupeLocationCandidates(candidates);
+  if (!unique.length) return null;
+  return [...unique]
+    .sort((a, b) => scoreLocationCandidate(query, b) - scoreLocationCandidate(query, a))
+    .find((candidate) => isAcceptableApproximateLocationCandidate(query, candidate)) || null;
+}
+
+function isAcceptableLocationCandidate(query, candidate) {
+  const primaryQuery = primaryPlaceFragment(query);
+  const contextFragments = contextPlaceFragments(query);
+  const label = String(candidate?.label || "");
+  const name = String(candidate?.city || "");
+  const primarySimilarity = Math.max(
+    textSimilarity(primaryQuery, name),
+    textSimilarity(primaryQuery, label),
+    fragmentTokenOverlap(primaryQuery, label)
+  );
+  if (normalizePlaceText(primaryQuery).length >= 5 && primarySimilarity < 0.45) return false;
+
+  if (contextFragments.length) {
+    const matchedContext = contextFragments.some(
+      (fragment) => Math.max(textSimilarity(fragment, label), fragmentTokenOverlap(fragment, label)) >= 0.6
+    );
+    if (!matchedContext) return false;
+  }
+
+  const broadPlaceTypes = new Set(["state", "administrative", "county", "district", "region", "province"]);
+  const broadCategories = new Set(["boundary", "place"]);
+  if ((broadPlaceTypes.has(String(candidate?.placeType || "").toLowerCase()) || broadCategories.has(String(candidate?.category || "").toLowerCase())) && primarySimilarity < 0.72) {
+    return false;
+  }
+
+  return true;
+}
+
+function isAcceptableApproximateLocationCandidate(query, candidate) {
+  const contextFragments = contextPlaceFragments(query);
+  if (!contextFragments.length) return false;
+
+  const placeType = String(candidate?.placeType || "").toLowerCase();
+  const category = String(candidate?.category || "").toLowerCase();
+  if (!["county", "district", "administrative", "municipality", "suburb", "city"].includes(placeType) && !["boundary", "place"].includes(category)) {
+    return false;
+  }
+  if (["state", "province", "region"].includes(placeType)) return false;
+
+  const label = String(candidate?.label || "");
+  const matchedFragments = contextFragments.filter(
+    (fragment) => Math.max(textSimilarity(fragment, label), fragmentTokenOverlap(fragment, label)) >= 0.6
+  ).length;
+  return matchedFragments >= 1;
+}
+
+function approximateLocationLabel(query, candidate) {
+  const primaryQuery = primaryPlaceFragment(query);
+  const context = String(candidate?.label || candidate?.city || "").trim();
+  if (!context) return `${primaryQuery} (approx.)`;
+  return `${primaryQuery}, near ${context}`;
+}
+
+async function searchOpenMeteoLocations(query) {
+  const response = await fetch(`${OPENMETEO_GEO_ENDPOINT}?name=${encodeURIComponent(query)}&count=10&language=en&format=json`);
   if (!response.ok) throw new Error(`Geocoding failed (${response.status})`);
   const payload = await response.json();
-  const first = (payload.results || [])[0];
-  if (!first) throw new Error("City not found");
-  return { latitude: Number(first.latitude), longitude: Number(first.longitude) };
+  return (payload.results || []).map(normalizeOpenMeteoLocationCandidate).filter(Boolean);
+}
+
+async function searchNominatimLocations(query) {
+  const params = new URLSearchParams({
+    q: String(query || ""),
+    format: "jsonv2",
+    limit: "10",
+    addressdetails: "1",
+  });
+  const response = await fetch(`${NOMINATIM_SEARCH_ENDPOINT}?${params.toString()}`);
+  if (!response.ok) throw new Error(`Nominatim geocoding failed (${response.status})`);
+  const payload = await response.json();
+  return (Array.isArray(payload) ? payload : []).map(normalizeNominatimLocationCandidate).filter(Boolean);
+}
+
+async function searchPhotonLocations(query) {
+  const params = new URLSearchParams({
+    q: String(query || ""),
+    limit: "10",
+  });
+  const response = await fetch(`${PHOTON_SEARCH_ENDPOINT}?${params.toString()}`);
+  if (!response.ok) throw new Error(`Photon geocoding failed (${response.status})`);
+  const payload = await response.json();
+  return (payload.features || []).map(normalizePhotonLocationCandidate).filter(Boolean);
+}
+
+async function staticGeocodeCity(city) {
+  const query = String(city || "").trim();
+  if (!query) throw new Error("City not found");
+  const directCoordinates = parseCoordinateInput(query);
+  if (directCoordinates) return directCoordinates;
+
+  const settled = await Promise.allSettled(
+    locationQueryVariants(query).flatMap((variant) => [searchOpenMeteoLocations(variant), searchNominatimLocations(variant), searchPhotonLocations(variant)])
+  );
+  const candidates = settled
+    .filter((result) => result.status === "fulfilled")
+    .flatMap((result) => result.value);
+  const best = pickBestLocationCandidate(query, candidates) || pickApproximateLocationCandidate(query, candidates);
+  if (!best) throw new Error("Location not found. Try adding district, state, or country.");
+  const approximate = !isAcceptableLocationCandidate(query, best);
+  return {
+    latitude: Number(best.latitude),
+    longitude: Number(best.longitude),
+    label: approximate ? approximateLocationLabel(query, best) : best.label || best.city || query,
+    city: best.city || query,
+    country: best.country || "",
+    approximateLocation: approximate,
+  };
 }
 
 async function staticReverseGeocode(latitude, longitude) {
-  const params = new URLSearchParams({
-    latitude: String(latitude),
-    longitude: String(longitude),
-    count: "1",
-    language: "en",
-    format: "json",
+  const safeLatitude = Number(latitude);
+  const safeLongitude = Number(longitude);
+  if (!Number.isFinite(safeLatitude) || !Number.isFinite(safeLongitude)) return "";
+
+  const reverseRequests = await Promise.allSettled([
+    (async () => {
+      const params = new URLSearchParams({
+        lat: String(safeLatitude),
+        lon: String(safeLongitude),
+        format: "jsonv2",
+        zoom: "18",
+        addressdetails: "1",
+      });
+      const response = await fetch(`${NOMINATIM_REVERSE_ENDPOINT}?${params.toString()}`);
+      if (!response.ok) throw new Error(`Reverse geocoding failed (${response.status})`);
+      return normalizeNominatimLocationCandidate(await response.json());
+    })(),
+    (async () => {
+      const params = new URLSearchParams({
+        latitude: String(safeLatitude),
+        longitude: String(safeLongitude),
+        count: "5",
+        language: "en",
+        format: "json",
+      });
+      const response = await fetch(`${OPENMETEO_REVERSE_GEO_ENDPOINT}?${params.toString()}`);
+      if (!response.ok) throw new Error(`Reverse geocoding failed (${response.status})`);
+      const payload = await response.json();
+      return normalizeOpenMeteoLocationCandidate((payload.results || [])[0]);
+    })(),
+  ]);
+
+  const candidates = reverseRequests
+    .filter((result) => result.status === "fulfilled" && result.value)
+    .map((result) => result.value);
+  if (!candidates.length) return "";
+
+  const specificity = ["hamlet", "isolated_dwelling", "neighbourhood", "suburb", "quarter", "village", "town", "municipality", "city"];
+  candidates.sort((a, b) => {
+    const typeRank = (value) => {
+      const index = specificity.indexOf(String(value || ""));
+      return index === -1 ? 0 : specificity.length - index;
+    };
+    const aRank = typeRank(a?.placeType);
+    const bRank = typeRank(b?.placeType);
+    if (bRank !== aRank) return bRank - aRank;
+    return Number(b?.importance || 0) - Number(a?.importance || 0);
   });
-  const response = await fetch(`${OPENMETEO_REVERSE_GEO_ENDPOINT}?${params.toString()}`);
-  if (!response.ok) throw new Error(`Reverse geocoding failed (${response.status})`);
-  const payload = await response.json();
-  const first = (payload.results || [])[0];
-  if (!first) return "";
-  return `${first.name || ""}${first.country_code ? `, ${first.country_code}` : ""}`.replace(/^,\s*/, "").trim();
+  return String(candidates[0]?.label || candidates[0]?.city || "").trim();
 }
 
 async function staticFetchCurrentFallback(payload, units) {
@@ -240,11 +630,13 @@ async function staticFetchCurrentFallback(payload, units) {
   const condition = WMO_TO_CONDITION[Number(current.weather_code)] || "Clouds";
   const isDayValue = Number(current.is_day);
   const isDay = Number.isFinite(isDayValue) ? isDayValue === 1 : undefined;
-  let location = payload.city || "";
-  try {
-    location = (await staticReverseGeocode(coords.latitude, coords.longitude)) || location;
-  } catch {
-    // keep existing location fallback
+  let location = String(payload.locationLabel || payload.label || payload.city || "").trim();
+  if (!location) {
+    try {
+      location = (await staticReverseGeocode(coords.latitude, coords.longitude)) || location;
+    } catch {
+      // keep existing location fallback
+    }
   }
 
   return {
@@ -269,6 +661,7 @@ async function staticFetchCurrentFallback(payload, units) {
     weatherCode: Number(current.weather_code),
     tempC: units === "imperial" ? ((temp - 32) * 5) / 9 : temp,
     windKmh: units === "imperial" ? windSpeed * 1.60934 : windSpeed * 3.6,
+    approximateLocation: Boolean(payload.approximateLocation),
   };
 }
 
@@ -276,9 +669,11 @@ async function staticFetchCurrent(payload) {
   const units = payload.units === "imperial" ? "imperial" : "metric";
   const lang = payload.language || "English";
   const langCode = i18nLanguageCode(lang);
-  const query = payload.city
-    ? { q: payload.city }
-    : { lat: String(payload.latitude), lon: String(payload.longitude) };
+  const hasCoords = Number.isFinite(Number(payload.latitude)) && Number.isFinite(Number(payload.longitude));
+  const query = hasCoords
+    ? { lat: String(payload.latitude), lon: String(payload.longitude) }
+    : { q: payload.city };
+  const locationLabel = String(payload.locationLabel || payload.label || "").trim();
 
   let lastError = "Unable to fetch weather.";
   for (const key of candidateApiKeys(payload.apiKey)) {
@@ -304,7 +699,7 @@ async function staticFetchCurrent(payload) {
         const iconCode = String(weather.icon || "");
         const isDay = iconCode.endsWith("d") ? true : iconCode.endsWith("n") ? false : undefined;
         return {
-          location: `${data.name || ""}${sys.country ? `, ${sys.country}` : ""}`,
+          location: locationLabel || `${data.name || ""}${sys.country ? `, ${sys.country}` : ""}`,
           temperature: main.temp,
           temperatureUnit: units === "imperial" ? "\u00B0F" : "\u00B0C",
           description: weather.description || "",
@@ -326,6 +721,7 @@ async function staticFetchCurrent(payload) {
           longitude: Number(coord.lon),
           tempC: units === "imperial" ? ((temp - 32) * 5) / 9 : temp,
           windKmh: units === "imperial" ? Number(wind.speed || 0) * 1.60934 : Number(wind.speed || 0) * 3.6,
+          approximateLocation: Boolean(payload.approximateLocation),
         };
       }
       if (response.status === 404) throw new Error("City not found");
@@ -509,7 +905,7 @@ async function staticBuildBundle(payload) {
   }
   if (location.city && (!location.latitude || !location.longitude)) {
     const geo = await staticGeocodeCity(location.city);
-    location = { ...location, ...geo };
+    location = { ...location, ...geo, locationLabel: geo.label || location.city, approximateLocation: Boolean(geo.approximateLocation) };
   }
   const current = await staticFetchCurrent(location);
   const forecast = await staticFetchForecast(Number(current.latitude), Number(current.longitude), payload.units || "metric");
@@ -797,7 +1193,7 @@ async function loadPlatformBundle(location = {}) {
     }
     cacheBundle(key, bundle);
     applyBundle(bundle);
-    setStatus(state.staticMode ? "Weather intelligence updated (static mode)" : "Weather intelligence updated", "success");
+    setStatus(bundle?.current?.approximateLocation ? "Approximate area weather loaded for your location." : state.staticMode ? "Weather intelligence updated (static mode)" : "Weather intelligence updated", "success");
     await saveCurrentCityToServer();
     return true;
   } catch (error) {
@@ -808,7 +1204,7 @@ async function loadPlatformBundle(location = {}) {
         const bundle = await staticBuildBundle(payload);
         cacheBundle(key, bundle);
         applyBundle(bundle);
-        setStatus("Backend unavailable. Running in static mode.", "success");
+        setStatus(bundle?.current?.approximateLocation ? "Backend unavailable. Loaded approximate area weather in static mode." : "Backend unavailable. Running in static mode.", "success");
         return true;
       } catch {
         // Continue to cache fallback below.

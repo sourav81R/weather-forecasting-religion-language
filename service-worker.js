@@ -1,4 +1,4 @@
-const CACHE_VERSION = "weather-studio-pwa-v39";
+const CACHE_VERSION = "weather-studio-pwa-v43";
 const UI_CACHE = `${CACHE_VERSION}-ui`;
 const DATA_CACHE = `${CACHE_VERSION}-data`;
 
@@ -11,14 +11,14 @@ const CORE_UI_ASSETS = [
   "/static/css/app.css",
   "/static/css/app.css?v=20260306-8",
   "/js/app.js",
-  "/js/app.js?v=20260307-28",
+  "/js/app.js?v=20260403-34",
   "/static/js/app.js",
-  "/static/js/app.js?v=20260306-11",
+  "/static/js/app.js?v=20260403-34",
   "/js/weatherMap.js",
   "/js/offlineForecast.js",
   "/js/liveCamera.js",
   "/frontend/css/app.css?v=20260307-27",
-  "/frontend/js/app.js?v=20260307-28",
+  "/frontend/js/app.js?v=20260403-34",
   "/frontend/js/weatherMap.js",
   "/frontend/js/offlineForecast.js",
   "/frontend/js/liveCamera.js",
@@ -74,6 +74,8 @@ function isWeatherDataRequest(url) {
   if (url.hostname === "api.open-meteo.com") return true;
   if (url.hostname === "geocoding-api.open-meteo.com") return true;
   if (url.hostname === "archive-api.open-meteo.com") return true;
+  if (url.hostname === "nominatim.openstreetmap.org") return true;
+  if (url.hostname === "photon.komoot.io") return true;
   if (url.hostname === "tile.openweathermap.org") return true;
   return false;
 }

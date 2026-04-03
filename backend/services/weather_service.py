@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import datetime as dt
+import re
+from difflib import SequenceMatcher
 from typing import Any
 
 import requests
@@ -11,7 +13,12 @@ from backend.utils.cache import TTLCache
 OPENWEATHER_CURRENT_URL = "https://api.openweathermap.org/data/2.5/weather"
 OPEN_METEO_FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
 OPEN_METEO_GEOCODE_URL = "https://geocoding-api.open-meteo.com/v1/search"
+OPEN_METEO_REVERSE_GEOCODE_URL = "https://geocoding-api.open-meteo.com/v1/reverse"
 OPEN_METEO_ARCHIVE_URL = "https://archive-api.open-meteo.com/v1/archive"
+NOMINATIM_SEARCH_URL = "https://nominatim.openstreetmap.org/search"
+NOMINATIM_REVERSE_URL = "https://nominatim.openstreetmap.org/reverse"
+PHOTON_SEARCH_URL = "https://photon.komoot.io/api/"
+GEOCODING_HEADERS = {"User-Agent": "RegionalWeatherStudio/1.0 (location-resolution)"}
 
 LANGUAGE_CODES = {
     "English": "en",
@@ -116,30 +123,96 @@ class WeatherService:
         if not clean_city:
             raise ValueError("City is required.")
 
+        coordinates = self._parse_coordinate_query(clean_city)
+        if coordinates is not None:
+            latitude, longitude = coordinates
+            try:
+                resolved = self.reverse_geocode(latitude=latitude, longitude=longitude)
+                resolved["latitude"] = latitude
+                resolved["longitude"] = longitude
+                return resolved
+            except ValueError:
+                return {
+                    "city": clean_city,
+                    "country": "",
+                    "latitude": latitude,
+                    "longitude": longitude,
+                    "timezone": "auto",
+                    "label": f"{latitude:.4f}, {longitude:.4f}",
+                    "source": "coordinates",
+                }
+
         cache_key = f"geocode::{clean_city.lower()}"
         cached = self.cache.get(cache_key)
         if cached is not None:
             return cached
 
-        payload = self._get_json(
-            OPEN_METEO_GEOCODE_URL,
-            {
-                "name": clean_city,
-                "count": 1,
-                "language": "en",
-                "format": "json",
-            },
-        )
-        result = (payload.get("results") or [None])[0]
-        if not result:
-            raise ValueError("Unable to geocode city.")
+        candidates: list[dict[str, Any]] = []
+        errors: list[str] = []
+        for loader in (self._search_open_meteo_candidates, self._search_nominatim_candidates, self._search_photon_candidates):
+            try:
+                candidates.extend(loader(clean_city))
+            except ValueError as exc:
+                errors.append(str(exc))
+
+        best_match = self._pick_best_location_candidate(clean_city, candidates)
+        approximate_match = None if best_match else self._pick_approximate_location_candidate(clean_city, candidates)
+        if not best_match:
+            if not approximate_match:
+                detail = f" {errors[-1]}" if errors else ""
+                raise ValueError(f"Unable to locate that place.{detail}".strip())
+            best_match = approximate_match
 
         output = {
-            "city": str(result.get("name", clean_city)),
-            "country": str(result.get("country", "")),
-            "latitude": float(result.get("latitude")),
-            "longitude": float(result.get("longitude")),
-            "timezone": str(result.get("timezone", "auto")),
+            "city": str(best_match.get("city") or clean_city),
+            "country": str(best_match.get("country", "")),
+            "latitude": float(best_match.get("latitude")),
+            "longitude": float(best_match.get("longitude")),
+            "timezone": str(best_match.get("timezone", "auto")),
+            "label": str(
+                self._approximate_location_label(clean_city, best_match)
+                if approximate_match
+                else best_match.get("label") or best_match.get("city") or clean_city
+            ),
+            "source": str(best_match.get("source", "geocoder")),
+            "approximate": bool(approximate_match),
+        }
+        self.cache.set(cache_key, output)
+        return output
+
+    def reverse_geocode(self, latitude: float, longitude: float) -> dict[str, Any]:
+        safe_latitude = max(-90.0, min(90.0, float(latitude)))
+        safe_longitude = ((float(longitude) + 180.0) % 360.0) - 180.0
+
+        cache_key = f"reverse-geocode::{safe_latitude:.4f}:{safe_longitude:.4f}"
+        cached = self.cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        candidates: list[dict[str, Any]] = []
+        errors: list[str] = []
+        for loader in (self._reverse_nominatim_candidate, self._reverse_open_meteo_candidate):
+            try:
+                candidate = loader(safe_latitude, safe_longitude)
+            except ValueError as exc:
+                errors.append(str(exc))
+                continue
+            if candidate:
+                candidates.append(candidate)
+
+        best_match = self._pick_best_reverse_candidate(candidates)
+        if not best_match:
+            detail = f" {errors[-1]}" if errors else ""
+            raise ValueError(f"Unable to reverse geocode location.{detail}".strip())
+
+        output = {
+            "city": str(best_match.get("city") or best_match.get("label") or f"{safe_latitude:.4f}, {safe_longitude:.4f}"),
+            "country": str(best_match.get("country", "")),
+            "latitude": safe_latitude,
+            "longitude": safe_longitude,
+            "timezone": str(best_match.get("timezone", "auto")),
+            "label": str(best_match.get("label") or best_match.get("city") or f"{safe_latitude:.4f}, {safe_longitude:.4f}"),
+            "source": str(best_match.get("source", "reverse-geocoder")),
         }
         self.cache.set(cache_key, output)
         return output
@@ -151,12 +224,18 @@ class WeatherService:
         language: str = "English",
         custom_key: str = "",
     ) -> dict[str, Any]:
-        params = {
-            "q": city.strip(),
-            "units": "imperial" if units == "imperial" else "metric",
-            "lang": LANGUAGE_CODES.get(language, "en"),
-        }
-        return self._fetch_current(params, units=units, custom_key=custom_key)
+        resolved = self.geocode_city(city)
+        current = self.fetch_current_by_coords(
+            latitude=float(resolved["latitude"]),
+            longitude=float(resolved["longitude"]),
+            units=units,
+            language=language,
+            custom_key=custom_key,
+            location_override=str(resolved.get("label") or resolved.get("city") or city.strip()),
+        )
+        if resolved.get("approximate"):
+            current["approximateLocation"] = True
+        return current
 
     def fetch_current_by_coords(
         self,
@@ -165,6 +244,7 @@ class WeatherService:
         units: str = "metric",
         language: str = "English",
         custom_key: str = "",
+        location_override: str = "",
     ) -> dict[str, Any]:
         params = {
             "lat": str(latitude),
@@ -172,7 +252,13 @@ class WeatherService:
             "units": "imperial" if units == "imperial" else "metric",
             "lang": LANGUAGE_CODES.get(language, "en"),
         }
-        return self._fetch_current(params, units=units, custom_key=custom_key)
+        resolved_label = location_override.strip()
+        if not resolved_label:
+            try:
+                resolved_label = str(self.reverse_geocode(latitude=latitude, longitude=longitude).get("label", "")).strip()
+            except ValueError:
+                resolved_label = ""
+        return self._fetch_current(params, units=units, custom_key=custom_key, location_override=resolved_label)
 
     def fetch_forecast(self, latitude: float, longitude: float, units: str = "metric", days: int = 15) -> dict[str, Any]:
         safe_days = max(1, min(int(days), 16))
@@ -311,7 +397,13 @@ class WeatherService:
         self.cache.set(cache_key, output, ttl_seconds=max(120, self.settings.cache_ttl_seconds // 2))
         return output
 
-    def _fetch_current(self, params: dict[str, Any], units: str, custom_key: str = "") -> dict[str, Any]:
+    def _fetch_current(
+        self,
+        params: dict[str, Any],
+        units: str,
+        custom_key: str = "",
+        location_override: str = "",
+    ) -> dict[str, Any]:
         attempts: list[str] = []
         keys = self.candidate_api_keys(custom_key)
         if not keys:
@@ -332,7 +424,7 @@ class WeatherService:
 
             payload = response.json() if response.content else {}
             if response.status_code == 200:
-                return self._normalize_current(payload, units=units, source=source)
+                return self._normalize_current(payload, units=units, source=source, location_override=location_override)
 
             if response.status_code in (401, 429):
                 attempts.append(str(payload.get("message", "Unauthorized")))
@@ -344,15 +436,15 @@ class WeatherService:
         tail = f" Last attempt: {attempts[-1]}" if attempts else ""
         raise ValueError(f"All inbuilt API keys failed.{tail}")
 
-    def _get_json(self, url: str, params: dict[str, Any]) -> dict[str, Any]:
+    def _get_json(self, url: str, params: dict[str, Any], headers: dict[str, str] | None = None) -> dict[str, Any]:
         try:
-            response = requests.get(url, params=params, timeout=self.settings.weather_timeout_seconds)
+            response = requests.get(url, params=params, headers=headers, timeout=self.settings.weather_timeout_seconds)
             response.raise_for_status()
             return response.json() if response.content else {}
         except requests.RequestException as exc:
             raise ValueError(f"Upstream API request failed: {exc}") from exc
 
-    def _normalize_current(self, payload: dict[str, Any], units: str, source: str) -> dict[str, Any]:
+    def _normalize_current(self, payload: dict[str, Any], units: str, source: str, location_override: str = "") -> dict[str, Any]:
         weather = (payload.get("weather") or [{}])[0]
         main = payload.get("main") or {}
         wind = payload.get("wind") or {}
@@ -366,7 +458,7 @@ class WeatherService:
         is_day = True if icon_code.endswith("d") else False if icon_code.endswith("n") else None
         city = str(payload.get("name", ""))
         country = str(sys_info.get("country", ""))
-        location = f"{city}, {country}" if country else city
+        location = location_override.strip() or (f"{city}, {country}" if country else city)
 
         return {
             "location": location,
@@ -537,6 +629,470 @@ class WeatherService:
                 }
             )
         return output
+
+    @staticmethod
+    def _parse_coordinate_query(text: str) -> tuple[float, float] | None:
+        normalized = str(text or "").strip()
+        if not normalized:
+            return None
+        match = re.fullmatch(r"(-?\d+(?:\.\d+)?)\s*[, ]\s*(-?\d+(?:\.\d+)?)", normalized)
+        if not match:
+            return None
+        latitude = float(match.group(1))
+        longitude = float(match.group(2))
+        if not (-90.0 <= latitude <= 90.0 and -180.0 <= longitude <= 180.0):
+            return None
+        return latitude, longitude
+
+    def _search_open_meteo_candidates(self, query: str) -> list[dict[str, Any]]:
+        candidates = []
+        for variant in self._query_variants(query):
+            payload = self._get_json(
+                OPEN_METEO_GEOCODE_URL,
+                {
+                    "name": variant,
+                    "count": 10,
+                    "language": "en",
+                    "format": "json",
+                },
+            )
+            for result in payload.get("results") or []:
+                try:
+                    candidates.append(self._normalize_open_meteo_candidate(result))
+                except (TypeError, ValueError):
+                    continue
+        return candidates
+
+    def _search_nominatim_candidates(self, query: str) -> list[dict[str, Any]]:
+        candidates = []
+        for variant in self._query_variants(query):
+            payload = self._get_json(
+                NOMINATIM_SEARCH_URL,
+                {
+                    "q": variant,
+                    "format": "jsonv2",
+                    "limit": 10,
+                    "addressdetails": 1,
+                },
+                headers=GEOCODING_HEADERS,
+            )
+            if not isinstance(payload, list):
+                raise ValueError("Unexpected geocoder payload.")
+            for result in payload:
+                try:
+                    candidates.append(self._normalize_nominatim_candidate(result))
+                except (TypeError, ValueError):
+                    continue
+        return candidates
+
+    def _search_photon_candidates(self, query: str) -> list[dict[str, Any]]:
+        candidates = []
+        for variant in self._query_variants(query):
+            payload = self._get_json(
+                PHOTON_SEARCH_URL,
+                {
+                    "q": variant,
+                    "limit": 10,
+                },
+                headers=GEOCODING_HEADERS,
+            )
+            for result in payload.get("features") or []:
+                try:
+                    candidates.append(self._normalize_photon_candidate(result))
+                except (TypeError, ValueError):
+                    continue
+        return candidates
+
+    def _reverse_open_meteo_candidate(self, latitude: float, longitude: float) -> dict[str, Any]:
+        payload = self._get_json(
+            OPEN_METEO_REVERSE_GEOCODE_URL,
+            {
+                "latitude": latitude,
+                "longitude": longitude,
+                "count": 5,
+                "language": "en",
+                "format": "json",
+            },
+        )
+        for result in payload.get("results") or []:
+            try:
+                return self._normalize_open_meteo_candidate(result)
+            except (TypeError, ValueError):
+                continue
+        raise ValueError("Reverse geocoder returned no results.")
+
+    def _reverse_nominatim_candidate(self, latitude: float, longitude: float) -> dict[str, Any]:
+        payload = self._get_json(
+            NOMINATIM_REVERSE_URL,
+            {
+                "lat": latitude,
+                "lon": longitude,
+                "format": "jsonv2",
+                "zoom": 18,
+                "addressdetails": 1,
+            },
+            headers=GEOCODING_HEADERS,
+        )
+        return self._normalize_nominatim_candidate(payload)
+
+    def _pick_best_location_candidate(self, query: str, candidates: list[dict[str, Any]]) -> dict[str, Any] | None:
+        unique_candidates = self._dedupe_location_candidates(candidates)
+        if not unique_candidates:
+            return None
+        scored = sorted(unique_candidates, key=lambda item: self._score_location_candidate(query, item), reverse=True)
+        for candidate in scored:
+            if self._is_acceptable_location_candidate(query, candidate):
+                return candidate
+        return None
+
+    def _pick_approximate_location_candidate(self, query: str, candidates: list[dict[str, Any]]) -> dict[str, Any] | None:
+        unique_candidates = self._dedupe_location_candidates(candidates)
+        if not unique_candidates:
+            return None
+        scored = sorted(unique_candidates, key=lambda item: self._score_location_candidate(query, item), reverse=True)
+        for candidate in scored:
+            if self._is_acceptable_approximate_candidate(query, candidate):
+                return candidate
+        return None
+
+    @staticmethod
+    def _pick_best_reverse_candidate(candidates: list[dict[str, Any]]) -> dict[str, Any] | None:
+        if not candidates:
+            return None
+        specificity = {
+            "hamlet": 5,
+            "isolated_dwelling": 5,
+            "neighbourhood": 4,
+            "suburb": 4,
+            "quarter": 4,
+            "village": 4,
+            "town": 3,
+            "municipality": 3,
+            "city": 2,
+            "county": 1,
+            "administrative": 0,
+        }
+        return max(
+            candidates,
+            key=lambda item: (
+                specificity.get(str(item.get("placeType", "")).lower(), 0),
+                float(item.get("importance") or 0),
+                len(str(item.get("label") or "")),
+            ),
+        )
+
+    @classmethod
+    def _score_location_candidate(cls, query: str, candidate: dict[str, Any]) -> float:
+        query_tokens = set(cls._place_tokens(query))
+        primary_query = cls._primary_place_fragment(query)
+        context_fragments = cls._context_place_fragments(query)
+        name = str(candidate.get("city") or "")
+        label = str(candidate.get("label") or "")
+        name_tokens = set(cls._place_tokens(name))
+        label_tokens = set(cls._place_tokens(label))
+        all_tokens = name_tokens | label_tokens
+        query_text = cls._normalize_place_text(query)
+        name_text = cls._normalize_place_text(name)
+        label_text = cls._normalize_place_text(label)
+
+        score = 0.0
+        if query_text and query_text == name_text:
+            score += 120
+        if query_text and query_text == label_text:
+            score += 90
+        if query_text and query_text in label_text:
+            score += 40
+        if query_tokens:
+            score += len(query_tokens & all_tokens) * 16
+            if query_tokens.issubset(all_tokens):
+                score += 24
+        primary_similarity = max(
+            cls._text_similarity(primary_query, name),
+            cls._text_similarity(primary_query, label),
+        )
+        score += primary_similarity * 55
+        if primary_query and len(cls._normalize_place_text(primary_query)) >= 5 and primary_similarity < 0.34:
+            score -= 34
+        if context_fragments:
+            context_score = 0.0
+            matched_fragments = 0
+            for fragment in context_fragments:
+                fragment_similarity = max(
+                    cls._text_similarity(fragment, label),
+                    cls._fragment_token_overlap(fragment, label),
+                )
+                if fragment_similarity >= 0.6:
+                    matched_fragments += 1
+                    context_score += fragment_similarity * 28
+                elif fragment_similarity >= 0.34:
+                    context_score += fragment_similarity * 10
+                else:
+                    context_score -= 26
+            score += context_score
+            if matched_fragments == 0:
+                score -= 70
+        score += min(float(candidate.get("importance") or 0) * 20, 12)
+        score += min(float(candidate.get("population") or 0) / 250000.0, 8)
+
+        place_type = str(candidate.get("placeType", "")).lower()
+        if place_type in {"village", "hamlet", "town", "municipality", "suburb"}:
+            score += 4
+        if candidate.get("source") == "open-meteo":
+            score += 2
+        if str(candidate.get("category", "")).lower() in {"railway", "amenity", "shop", "tourism", "building", "highway"}:
+            score -= 8
+        return score
+
+    @classmethod
+    def _is_acceptable_location_candidate(cls, query: str, candidate: dict[str, Any]) -> bool:
+        primary_query = cls._primary_place_fragment(query)
+        context_fragments = cls._context_place_fragments(query)
+        label = str(candidate.get("label") or "")
+        name = str(candidate.get("city") or "")
+        primary_similarity = max(
+            cls._text_similarity(primary_query, name),
+            cls._text_similarity(primary_query, label),
+            cls._fragment_token_overlap(primary_query, label),
+        )
+        if len(cls._normalize_place_text(primary_query)) >= 5 and primary_similarity < 0.45:
+            return False
+
+        if context_fragments:
+            matched_context = any(
+                max(
+                    cls._text_similarity(fragment, label),
+                    cls._fragment_token_overlap(fragment, label),
+                )
+                >= 0.6
+                for fragment in context_fragments
+            )
+            if not matched_context:
+                return False
+
+        broad_place_types = {"state", "administrative", "county", "district", "region", "province"}
+        broad_categories = {"boundary", "place"}
+        if (
+            str(candidate.get("placeType", "")).lower() in broad_place_types
+            or str(candidate.get("category", "")).lower() in broad_categories
+        ) and primary_similarity < 0.72:
+            return False
+
+        return True
+
+    @classmethod
+    def _is_acceptable_approximate_candidate(cls, query: str, candidate: dict[str, Any]) -> bool:
+        context_fragments = cls._context_place_fragments(query)
+        if not context_fragments:
+            return False
+
+        place_type = str(candidate.get("placeType", "")).lower()
+        category = str(candidate.get("category", "")).lower()
+        if place_type not in {"county", "district", "administrative", "municipality", "suburb", "city"} and category not in {"boundary", "place"}:
+            return False
+        if place_type in {"state", "province", "region"}:
+            return False
+
+        label = str(candidate.get("label") or "")
+        matched_fragments = 0
+        for fragment in context_fragments:
+            similarity = max(
+                cls._text_similarity(fragment, label),
+                cls._fragment_token_overlap(fragment, label),
+            )
+            if similarity >= 0.6:
+                matched_fragments += 1
+        return matched_fragments >= 1
+
+    @classmethod
+    def _approximate_location_label(cls, query: str, candidate: dict[str, Any]) -> str:
+        primary_query = cls._primary_place_fragment(query)
+        context = str(candidate.get("label") or candidate.get("city") or "").strip()
+        if not context:
+            return f"{primary_query} (approx.)"
+        return f"{primary_query}, near {context}"
+
+    @staticmethod
+    def _dedupe_location_candidates(candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        unique: list[dict[str, Any]] = []
+        seen: set[tuple[float, float, str]] = set()
+        for candidate in candidates:
+            try:
+                key = (
+                    round(float(candidate.get("latitude")), 4),
+                    round(float(candidate.get("longitude")), 4),
+                    str(candidate.get("city") or "").strip().lower(),
+                )
+            except (TypeError, ValueError):
+                continue
+            if key in seen:
+                continue
+            seen.add(key)
+            unique.append(candidate)
+        return unique
+
+    @staticmethod
+    def _normalize_open_meteo_candidate(result: dict[str, Any]) -> dict[str, Any]:
+        city = str(result.get("name") or "").strip()
+        if not city:
+            raise ValueError("Missing location name.")
+        admin1 = str(result.get("admin1") or "").strip()
+        admin2 = str(result.get("admin2") or "").strip()
+        country = str(result.get("country") or result.get("country_code") or "").strip()
+        label = WeatherService._compose_location_label(city, admin2, admin1, country)
+        return {
+            "city": city,
+            "country": country,
+            "latitude": float(result.get("latitude")),
+            "longitude": float(result.get("longitude")),
+            "timezone": str(result.get("timezone") or "auto"),
+            "label": label,
+            "source": "open-meteo",
+            "population": float(result.get("population") or 0),
+            "importance": 0.55,
+            "placeType": str(result.get("feature_code") or "").strip(),
+            "category": "place",
+        }
+
+    @staticmethod
+    def _normalize_nominatim_candidate(result: dict[str, Any]) -> dict[str, Any]:
+        address = result.get("address") if isinstance(result.get("address"), dict) else {}
+        city = str(
+            result.get("name")
+            or address.get("village")
+            or address.get("town")
+            or address.get("city")
+            or address.get("municipality")
+            or address.get("county")
+            or address.get("state_district")
+            or address.get("suburb")
+            or address.get("hamlet")
+            or ""
+        ).strip()
+        if not city:
+            display_name = str(result.get("display_name") or "").strip()
+            city = display_name.split(",")[0].strip() if display_name else ""
+        if not city:
+            raise ValueError("Missing location name.")
+        admin1 = str(address.get("state") or "").strip()
+        admin2 = str(address.get("county") or address.get("state_district") or address.get("district") or "").strip()
+        country = str(address.get("country") or "").strip()
+        label = WeatherService._compose_location_label(city, admin2, admin1, country)
+        return {
+            "city": city,
+            "country": country,
+            "latitude": float(result.get("lat")),
+            "longitude": float(result.get("lon")),
+            "timezone": "auto",
+            "label": label,
+            "source": "nominatim",
+            "population": 0.0,
+            "importance": float(result.get("importance") or 0),
+            "placeType": str(result.get("type") or "").strip(),
+            "category": str(result.get("category") or "").strip(),
+        }
+
+    @staticmethod
+    def _normalize_photon_candidate(result: dict[str, Any]) -> dict[str, Any]:
+        properties = result.get("properties") if isinstance(result.get("properties"), dict) else {}
+        geometry = result.get("geometry") if isinstance(result.get("geometry"), dict) else {}
+        coordinates = geometry.get("coordinates") if isinstance(geometry.get("coordinates"), list) else []
+        if len(coordinates) < 2:
+            raise ValueError("Missing coordinates.")
+        city = str(
+            properties.get("name")
+            or properties.get("city")
+            or properties.get("county")
+            or ""
+        ).strip()
+        if not city:
+            raise ValueError("Missing location name.")
+        county = str(properties.get("county") or properties.get("district") or properties.get("city") or "").strip()
+        state = str(properties.get("state") or "").strip()
+        country = str(properties.get("country") or properties.get("countrycode") or "").strip()
+        label = WeatherService._compose_location_label(city, county, state, country)
+        return {
+            "city": city,
+            "country": country,
+            "latitude": float(coordinates[1]),
+            "longitude": float(coordinates[0]),
+            "timezone": "auto",
+            "label": label,
+            "source": "photon",
+            "population": 0.0,
+            "importance": 0.35,
+            "placeType": str(properties.get("osm_value") or properties.get("type") or "").strip(),
+            "category": str(properties.get("osm_key") or properties.get("type") or "").strip(),
+        }
+
+    @staticmethod
+    def _compose_location_label(*parts: str) -> str:
+        compact = []
+        seen = set()
+        for raw in parts:
+            value = str(raw or "").strip()
+            if not value:
+                continue
+            lowered = value.lower()
+            if lowered in seen:
+                continue
+            seen.add(lowered)
+            compact.append(value)
+        return ", ".join(compact)
+
+    @staticmethod
+    def _normalize_place_text(value: str) -> str:
+        return re.sub(r"[^a-z0-9]+", " ", str(value or "").strip().lower()).strip()
+
+    @classmethod
+    def _place_tokens(cls, value: str) -> list[str]:
+        return [token for token in cls._normalize_place_text(value).split() if token]
+
+    @staticmethod
+    def _query_variants(query: str) -> list[str]:
+        parts = [part.strip() for part in str(query or "").split(",") if part.strip()]
+        variants = [str(query or "").strip()]
+        if parts:
+            variants.append(" ".join(parts))
+            variants.append(parts[0])
+        if len(parts) >= 2:
+            variants.append(f"{parts[0]} {parts[-1]}")
+
+        unique: list[str] = []
+        seen = set()
+        for variant in variants:
+            clean = re.sub(r"\s+", " ", variant).strip()
+            lowered = clean.lower()
+            if not clean or lowered in seen:
+                continue
+            seen.add(lowered)
+            unique.append(clean)
+        return unique
+
+    @staticmethod
+    def _primary_place_fragment(query: str) -> str:
+        parts = [part.strip() for part in str(query or "").split(",") if part.strip()]
+        return parts[0] if parts else str(query or "").strip()
+
+    @classmethod
+    def _text_similarity(cls, left: str, right: str) -> float:
+        a = cls._normalize_place_text(left).replace(" ", "")
+        b = cls._normalize_place_text(right).replace(" ", "")
+        if not a or not b:
+            return 0.0
+        return SequenceMatcher(None, a, b).ratio()
+
+    @staticmethod
+    def _context_place_fragments(query: str) -> list[str]:
+        return [part.strip() for part in str(query or "").split(",")[1:] if part.strip()]
+
+    @classmethod
+    def _fragment_token_overlap(cls, left: str, right: str) -> float:
+        left_tokens = set(cls._place_tokens(left))
+        right_tokens = set(cls._place_tokens(right))
+        if not left_tokens or not right_tokens:
+            return 0.0
+        overlap = len(left_tokens & right_tokens)
+        return overlap / max(len(left_tokens), 1)
 
 
 weather_service = WeatherService()
